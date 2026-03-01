@@ -1,0 +1,15 @@
+services:
+  local-codex-kit:
+    build:
+      context: .
+    image: allsagetech/local-codex-kit:latest
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    ports: []
+    expose: []
+    environment:
+      LOCAL_CODEX_WORKSPACE: /workspace
+    volumes:
+      - .:/opt/local-codex-kit
+      - ${LOCAL_CODEX_WORKSPACE:-.}:/workspace
