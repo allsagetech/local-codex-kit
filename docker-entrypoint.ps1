@@ -1,20 +1,24 @@
 $ErrorActionPreference = 'Stop'
 $Command = @($args)
 
-$toolchainModulePath = if ($env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH) {
-    $env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH
-} else {
-    '/opt/toolchain-module'
-}
+$toolchainModulePath = if ($env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH) { $env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH } else { '/opt/powershell-modules' }
 
-$env:ToolchainPullPolicy = if ($env:ToolchainPullPolicy) { $env:ToolchainPullPolicy } else { 'Never' }
+$env:ToolchainPullPolicy = if ($env:ToolchainPullPolicy) { $env:ToolchainPullPolicy } else { 'IfNotPresent' }
+$env:ToolchainPath = if ($env:ToolchainPath) { $env:ToolchainPath } else { '/opt/toolchain-cache' }
+$env:ToolchainRepo = if ($env:ToolchainRepo) { $env:ToolchainRepo } else { '/opt/toolchain-repo' }
 $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN = if ($env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN) { $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN } else { '1' }
 
-if (Test-Path $toolchainModulePath) {
+foreach ($candidate in @($toolchainModulePath, '/root/Documents/PowerShell/Modules', '/root/Documents/WindowsPowerShell/Modules')) {
+    if (-not $candidate -or -not (Test-Path $candidate)) {
+        continue
+    }
+
     if ($env:PSModulePath) {
-        $env:PSModulePath = "${toolchainModulePath}:$env:PSModulePath"
+        if (-not ($env:PSModulePath.Split(':') -contains $candidate)) {
+            $env:PSModulePath = "${candidate}:$env:PSModulePath"
+        }
     } else {
-        $env:PSModulePath = $toolchainModulePath
+        $env:PSModulePath = $candidate
     }
 }
 
@@ -43,6 +47,8 @@ Write-Host ("- Working directory: {0}" -f (Get-Location).Path)
 Write-Host ("- Codex CLI: {0}" -f ((Get-Command codex).Source))
 Write-Host ("- Network mode: {0}" -f 'offline (set by docker compose)')
 Write-Host ("- Toolchain module path: {0}" -f $toolchainModulePath)
+Write-Host ("- Toolchain cache path: {0}" -f $env:ToolchainPath)
+Write-Host ("- Toolchain offline repo: {0}" -f $env:ToolchainRepo)
 Write-Host ("- Toolchain pull policy: {0}" -f $env:ToolchainPullPolicy)
 Write-Host '- Use this container for the kit scripts and Codex CLI environment.'
 Write-Host ''

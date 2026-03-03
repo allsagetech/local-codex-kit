@@ -11,6 +11,34 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'codex-backend.ps1')
 
+function Repair-ToolchainLinuxExecutableBits {
+    if (-not $IsLinux) {
+        return
+    }
+
+    $toolchainPath = if ([string]::IsNullOrWhiteSpace($env:ToolchainPath)) {
+        '/opt/toolchain-cache'
+    } else {
+        $env:ToolchainPath
+    }
+
+    $contentRoot = Join-Path $toolchainPath 'content'
+    if (-not (Test-Path -LiteralPath $contentRoot)) {
+        return
+    }
+
+    $bash = Get-Command bash -ErrorAction SilentlyContinue
+    if (-not $bash) {
+        return
+    }
+
+    # Toolchain extraction currently drops executable bits for Linux package files.
+    # Restore executable mode for common tool entrypoints before invoking toolchain exec.
+    $escapedContentRoot = $contentRoot.Replace("'", "'\''")
+    $chmodScript = "set -e; root='$escapedContentRoot'; if [ -d `"${root}`" ]; then find `"${root}`" -type f \( -path '*/bin/*' -o -path '*/vendor/*/codex/codex' \) -exec chmod a+rx {} +; fi"
+    & $bash.Source -lc $chmodScript
+}
+
 $spec = Get-CodexLaunchSpec -ScriptRoot $PSScriptRoot -Mode $Mode -ExtraPrompt $ExtraPrompt -NoPreamble:$NoPreamble -WorkingDirectory $WorkingDirectory -UseToolchain:$UseToolchain -SkipRepoCheck:$SkipRepoCheck
 
 Write-Host ''
@@ -37,7 +65,8 @@ Write-Host ("- Toolchain: {0}" -f $(if ($UseToolchain) { 'enabled' } else { 'dis
 if ($UseToolchain) {
     $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
     if ($useLlvmToolchain) {
-        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
+        $defaultLlvmPkgForHost = if ($IsLinux) { 'llvm-linux:latest' } else { 'llvm:latest' }
+        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { $defaultLlvmPkgForHost } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
         Write-Host ("- Toolchain LLVM package: {0}" -f $llvmPackage)
     }
 }
@@ -64,15 +93,21 @@ if ($UseToolchain) {
         }
         $scriptBlock = [scriptblock]::Create($scriptText)
 
-        $codexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { 'codex:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
-        $gitPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG)) { 'git:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG }
+        $defaultCodexPkg = if ($IsLinux) { 'codex-linux:latest' } else { 'codex:latest' }
+        $defaultGitPkg = if ($IsLinux) { 'git-linux:latest' } else { 'git:latest' }
+        $defaultLlvmPkg = if ($IsLinux) { 'llvm-linux:latest' } else { 'llvm:latest' }
+
+        $codexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { $defaultCodexPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
+        $gitPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG)) { $defaultGitPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG }
         $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
-        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
+        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { $defaultLlvmPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
         $toolchainPackages = @($codexPackage, $gitPackage)
         if ($useLlvmToolchain) {
             $toolchainPackages += $llvmPackage
         }
 
+        toolchain pull @toolchainPackages | Out-Host
+        Repair-ToolchainLinuxExecutableBits
         toolchain exec @toolchainPackages $scriptBlock
     } finally {
         Pop-Location

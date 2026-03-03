@@ -8,18 +8,26 @@ $toolchainCandidates = @()
 if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_REPO)) {
     $toolchainCandidates += $env:LOCAL_CODEX_TOOLCHAIN_REPO
 }
+
+if ($IsWindows) {
+    $toolchainCandidates += 'C:\Users\sages\Documents\allsagetech\Toolchain'
+}
+
 $toolchainCandidates += @(
-    'C:\Users\sages\Documents\allsagetech\Toolchain',
     (Join-Path (Split-Path $PSScriptRoot -Parent) 'Toolchain'),
     (Join-Path $PSScriptRoot 'Toolchain')
 )
 
 $toolchainRoot = $null
 foreach ($candidate in $toolchainCandidates) {
-    $candidateInstaller = Join-Path $candidate 'install.ps1'
-    if (Test-Path $candidateInstaller) {
-        $toolchainRoot = $candidate
-        break
+    try {
+        $candidateInstaller = Join-Path $candidate 'install.ps1'
+        if (Test-Path $candidateInstaller) {
+            $toolchainRoot = $candidate
+            break
+        }
+    } catch {
+        continue
     }
 }
 
