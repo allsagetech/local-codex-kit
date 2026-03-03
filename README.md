@@ -80,8 +80,10 @@ The container profile maps `codex` to LLVM/vLLM mode with Toolchain enabled by d
 Because networking is disabled, `LOCAL_CODEX_LLVM_BASE_URL` must point to a server running inside the same container namespace (for example `http://127.0.0.1:8000/v1`).
 If you need Toolchain in the container, it mounts:
 
-- Toolchain repo: `C:\Users\sages\Documents\allsagetech\Toolchain` -> `/opt/toolchain`
+- Toolchain module: `C:\Users\sages\Documents\WindowsPowerShell\Modules\Toolchain` -> `/opt/toolchain-module`
 - Toolchain cache: `C:\Users\sages\AppData\Local\Toolchain` -> `/toolchain-cache`
+
+Toolchain package build/push workflow should stay in your `C:\Users\sages\Documents\allsagetech\Toolchains` repo; this kit only consumes already-available packages.
 
 For strict offline runs, set package refs to locally available values (instead of `:latest`) if needed:
 
@@ -177,7 +179,7 @@ That is simpler than asking them to hand-edit their profile.
 - `codex-backend.ps1`: model routing, Git checks, LM Studio integration, and LLVM/vLLM custom-provider integration
 - `bootstrap-toolchain.ps1`: ensures Toolchain is installed, preferring `C:\Users\sages\Documents\allsagetech\Toolchain` or `LOCAL_CODEX_TOOLCHAIN_REPO`
 - `Dockerfile`: builds a PowerShell image with Git and Codex CLI for packaging the kit
-- `docker-entrypoint.ps1`: starts an interactive container shell, installs Toolchain module from mounted repo if needed, and enforces offline Toolchain pull policy
+- `docker-entrypoint.ps1`: starts an interactive container shell, loads Toolchain module from mounted module path, and enforces offline Toolchain pull policy
 - `docker-profile.ps1`: maps container commands (`codex`, `codex-llvm`, `codex-vllm`, etc.) to kit presets
 - `docker-lmstudio-bridge.js`: optional host LM Studio bridge helper (not used by default in offline container mode)
 - `docker-compose.yml`: mounts the kit/workspace/toolchain and disables container network access

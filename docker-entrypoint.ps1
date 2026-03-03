@@ -1,25 +1,27 @@
 $ErrorActionPreference = 'Stop'
 $Command = @($args)
 
-$toolchainRepo = if ($env:LOCAL_CODEX_TOOLCHAIN_REPO) {
-    $env:LOCAL_CODEX_TOOLCHAIN_REPO
+$toolchainModulePath = if ($env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH) {
+    $env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH
 } else {
-    '/opt/toolchain'
+    '/opt/toolchain-module'
 }
 
 $env:ToolchainPullPolicy = if ($env:ToolchainPullPolicy) { $env:ToolchainPullPolicy } else { 'Never' }
 $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN = if ($env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN) { $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN } else { '1' }
 
-if (-not (Get-Module -ListAvailable Toolchain)) {
-    $toolchainInstaller = Join-Path $toolchainRepo 'install.ps1'
-    if (Test-Path $toolchainInstaller) {
-        Write-Host ("Installing Toolchain module from {0}..." -f $toolchainRepo)
-        & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File $toolchainInstaller
+if (Test-Path $toolchainModulePath) {
+    if ($env:PSModulePath) {
+        $env:PSModulePath = "${toolchainModulePath}:$env:PSModulePath"
+    } else {
+        $env:PSModulePath = $toolchainModulePath
     }
 }
 
 if (Get-Module -ListAvailable Toolchain) {
     Import-Module Toolchain -Force
+} else {
+    Write-Warning ("Toolchain module not found. Mount it at {0} or set LOCAL_CODEX_TOOLCHAIN_MODULE_PATH." -f $toolchainModulePath)
 }
 
 $workspace = if ($env:LOCAL_CODEX_WORKSPACE) {
@@ -40,7 +42,7 @@ Write-Host ("- Repo: {0}" -f '/opt/local-codex-kit')
 Write-Host ("- Working directory: {0}" -f (Get-Location).Path)
 Write-Host ("- Codex CLI: {0}" -f ((Get-Command codex).Source))
 Write-Host ("- Network mode: {0}" -f 'offline (set by docker compose)')
-Write-Host ("- Toolchain repo: {0}" -f $toolchainRepo)
+Write-Host ("- Toolchain module path: {0}" -f $toolchainModulePath)
 Write-Host ("- Toolchain pull policy: {0}" -f $env:ToolchainPullPolicy)
 Write-Host '- Use this container for the kit scripts and Codex CLI environment.'
 Write-Host ''

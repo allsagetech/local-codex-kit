@@ -11,7 +11,7 @@ services:
     expose: []
     environment:
       LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_TOOLCHAIN_REPO: /opt/toolchain
+      LOCAL_CODEX_TOOLCHAIN_MODULE_PATH: /opt/toolchain-module
       LOCAL_CODEX_LLVM_BASE_URL: ${LOCAL_CODEX_LLVM_BASE_URL:-http://127.0.0.1:8000/v1}
       LOCAL_CODEX_LLVM_MODEL: ${LOCAL_CODEX_LLVM_MODEL:-llama3}
       LOCAL_CODEX_USE_LLVM_TOOLCHAIN: ${LOCAL_CODEX_USE_LLVM_TOOLCHAIN:-1}
@@ -23,5 +23,5 @@ services:
     volumes:
       - .:/opt/local-codex-kit
       - ${LOCAL_CODEX_WORKSPACE:-.}:/workspace
-      - ${LOCAL_CODEX_TOOLCHAIN_REPO:-C:/Users/sages/Documents/allsagetech/Toolchain}:/opt/toolchain:ro
+      - ${LOCAL_CODEX_TOOLCHAIN_MODULE_PATH_HOST:-C:/Users/sages/Documents/WindowsPowerShell/Modules/Toolchain}:/opt/toolchain-module:ro
       - ${LOCAL_CODEX_TOOLCHAIN_PATH:-C:/Users/sages/AppData/Local/Toolchain}:/toolchain-cache
