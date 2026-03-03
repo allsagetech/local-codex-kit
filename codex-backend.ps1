@@ -248,7 +248,7 @@ function Get-CodexLaunchSpec {
             $contextLength = 32768
             $localBaseUrl = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_BASE_URL)) { 'http://127.0.0.1:8000/v1' } else { $env:LOCAL_CODEX_LLVM_BASE_URL }
             $localApiKeyEnv = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_API_KEY_ENV)) { 'LOCAL_CODEX_LLVM_API_KEY' } else { $env:LOCAL_CODEX_LLVM_API_KEY_ENV }
-            $localWireApi = 'responses'
+            $localWireApi = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_WIRE_API)) { 'responses' } else { $env:LOCAL_CODEX_LLVM_WIRE_API }
 
             if ([string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable($localApiKeyEnv, 'Process'))) {
                 Set-Item -Path ("Env:{0}" -f $localApiKeyEnv) -Value 'local'

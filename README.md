@@ -56,12 +56,34 @@ Preview the uninstall without removing anything:
 .\delete.ps1 -DryRun
 ```
 
-Build the Docker image if you want a packaged CLI environment:
+Build the Docker image if you want a packaged offline CLI + model environment:
+
+1. Seed Toolchain package content:
 
 ```powershell
 .\seed-toolchain-offline.ps1 -Clean
+```
+
+2. Add a local GGUF model file to `.\.models\` (recommended for offline rebuilds), for example:
+
+```powershell
+New-Item -ItemType Directory -Force .\.models | Out-Null
+# Copy your 7B GGUF file into .\.models\
+```
+
+3. Build and run:
+
+```powershell
 docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
+```
+
+Optional: download the model during build instead of copying it into `.\.models\`:
+
+```powershell
+$env:LOCAL_CODEX_EMBEDDED_MODEL_URL='https://.../qwen2.5-coder-7b-instruct-q4_k_m.gguf'
+$env:LOCAL_CODEX_EMBEDDED_MODEL_SHA256='<sha256>'
+docker compose build local-codex-kit
 ```
 
 Default Docker package refs used by this flow:
@@ -86,7 +108,8 @@ codex-small
 The container profile maps `codex` to LLVM/vLLM mode with Toolchain enabled by default.
 `codex-local`, `codex-qwen`, and `codex-small` are also available.
 `docker compose` is configured with `network_mode: "none"` so the container has no internet access.
-Because networking is disabled, `LOCAL_CODEX_LLVM_BASE_URL` must point to a server running inside the same container namespace (for example `http://127.0.0.1:8000/v1`).
+The container now starts an embedded `llama.cpp` server when a model is available at `LOCAL_CODEX_EMBEDDED_MODEL_PATH` (default `/opt/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf`).
+Codex still uses a local OpenAI-compatible loopback endpoint (`http://127.0.0.1:8000/v1`), but no external API/network calls are required at runtime.
 `.\seed-toolchain-offline.ps1` saves Toolchain packages into `.\.toolchain-offline` (gitignored), and Docker copies that folder into `/opt/toolchain-repo` inside the image.
 At runtime, Toolchain is configured with `ToolchainRepo=/opt/toolchain-repo` and `ToolchainPullPolicy=IfNotPresent` so package resolution stays local/offline.
 
@@ -131,7 +154,8 @@ codex
 - the Toolchain `codex:latest` package will be fetched by `.\install.ps1`
 - the Toolchain `llvm:latest` package will be fetched by `.\install.ps1` (disable with `LOCAL_CODEX_USE_LLVM_TOOLCHAIN=0`)
 - for `local`, `qwen`, or `small` presets: LM Studio desktop will be installed if missing, `lmstudio:latest` can bootstrap `lms`, and default models are downloaded
-- for `llvm`/`vllm` preset: run your local LLVM/vLLM-compatible server separately (default endpoint `http://127.0.0.1:8000/v1`)
+- for `llvm`/`vllm` preset on Windows host: run your local LLVM/vLLM-compatible server separately (default endpoint `http://127.0.0.1:8000/v1`)
+- for Docker offline mode: include a GGUF model in the image and let the container launch embedded `llama-server`
 
 ## What `codex` does here
 
@@ -152,8 +176,9 @@ LLVM/vLLM route defaults:
 
 - provider: `llvm`
 - base URL env: `LOCAL_CODEX_LLVM_BASE_URL` (default `http://127.0.0.1:8000/v1`)
-- model env: `LOCAL_CODEX_LLVM_MODEL` (default `llama3`)
+- model env: `LOCAL_CODEX_LLVM_MODEL` (default `qwen2.5-coder-7b-instruct` in Docker)
 - API key env name: `LOCAL_CODEX_LLVM_API_KEY_ENV` (default `LOCAL_CODEX_LLVM_API_KEY`)
+- wire API env: `LOCAL_CODEX_LLVM_WIRE_API` (set `chat` for embedded `llama.cpp`)
 - Toolchain package envs: `LOCAL_CODEX_TOOLCHAIN_CODEX_PKG` / `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG`
 
 ## Expected startup output
@@ -198,7 +223,8 @@ That is simpler than asking them to hand-edit their profile.
 - `bootstrap-toolchain.ps1`: ensures Toolchain is installed, preferring `C:\Users\sages\Documents\allsagetech\Toolchain` or `LOCAL_CODEX_TOOLCHAIN_REPO`
 - `seed-toolchain-offline.ps1`: saves selected Toolchain packages into `.\.toolchain-offline` for Docker offline seeding (defaults: `codex-linux`, `git-linux`, `llvm-linux`)
 - `Dockerfile`: builds a PowerShell image with Git/Codex CLI, installs Toolchain in Linux, and copies `.\.toolchain-offline` into `/opt/toolchain-repo`
-- `docker-entrypoint.ps1`: starts an interactive container shell, loads Toolchain module, and enforces offline Toolchain pull policy
+- `start-embedded-llm.ps1`: launches embedded `llama-server` inside the container and waits for readiness
+- `docker-entrypoint.ps1`: starts embedded model server when enabled, loads Toolchain module, and starts container shell
 - `docker-profile.ps1`: maps container commands (`codex`, `codex-llvm`, `codex-vllm`, etc.) to kit presets
 - `docker-lmstudio-bridge.js`: optional host LM Studio bridge helper (not used by default in offline container mode)
 - `docker-compose.yml`: mounts the kit/workspace, passes Toolchain build args, and disables container network access
@@ -209,6 +235,7 @@ That is simpler than asking them to hand-edit their profile.
 - run `. $PROFILE` or open a new PowerShell window after changing your profile
 - starting from a Git repo gives better repo-aware behavior
 - `Codex sandbox: workspace-write` is the Codex CLI permission sandbox; the Docker image is only a packaging/container layer around the CLI
+- model weights are not included by default; add them via `.\.models` or `LOCAL_CODEX_EMBEDDED_MODEL_URL`, and follow each model's license/usage terms
 
 ## License
 
