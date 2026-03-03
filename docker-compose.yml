@@ -3,6 +3,7 @@ services:
     build:
       context: .
     image: allsagetech/local-codex-kit:latest
+    network_mode: "none"
     stdin_open: true
     tty: true
     working_dir: /workspace
@@ -10,6 +11,17 @@ services:
     expose: []
     environment:
       LOCAL_CODEX_WORKSPACE: /workspace
+      LOCAL_CODEX_TOOLCHAIN_REPO: /opt/toolchain
+      LOCAL_CODEX_LLVM_BASE_URL: ${LOCAL_CODEX_LLVM_BASE_URL:-http://127.0.0.1:8000/v1}
+      LOCAL_CODEX_LLVM_MODEL: ${LOCAL_CODEX_LLVM_MODEL:-llama3}
+      LOCAL_CODEX_USE_LLVM_TOOLCHAIN: ${LOCAL_CODEX_USE_LLVM_TOOLCHAIN:-1}
+      LOCAL_CODEX_TOOLCHAIN_CODEX_PKG: ${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG:-codex:latest}
+      LOCAL_CODEX_TOOLCHAIN_GIT_PKG: ${LOCAL_CODEX_TOOLCHAIN_GIT_PKG:-git:latest}
+      LOCAL_CODEX_TOOLCHAIN_LLVM_PKG: ${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG:-llvm:latest}
+      ToolchainPath: /toolchain-cache
+      ToolchainPullPolicy: Never
     volumes:
       - .:/opt/local-codex-kit
       - ${LOCAL_CODEX_WORKSPACE:-.}:/workspace
+      - ${LOCAL_CODEX_TOOLCHAIN_REPO:-C:/Users/sages/Documents/allsagetech/Toolchain}:/opt/toolchain:ro
+      - ${LOCAL_CODEX_TOOLCHAIN_PATH:-C:/Users/sages/AppData/Local/Toolchain}:/toolchain-cache
