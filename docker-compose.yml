@@ -2,6 +2,9 @@ services:
   local-codex-kit:
     build:
       context: .
+      args:
+        TOOLCHAIN_REPO_URL: ${LOCAL_CODEX_TOOLCHAIN_REPO_URL:-https://github.com/allsagetech/Toolchain.git}
+        TOOLCHAIN_REPO_REF: ${LOCAL_CODEX_TOOLCHAIN_REPO_REF:-main}
     image: allsagetech/local-codex-kit:latest
     network_mode: "none"
     stdin_open: true
@@ -11,17 +14,16 @@ services:
     expose: []
     environment:
       LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_TOOLCHAIN_MODULE_PATH: /opt/toolchain-module
+      LOCAL_CODEX_TOOLCHAIN_MODULE_PATH: /opt/powershell-modules
       LOCAL_CODEX_LLVM_BASE_URL: ${LOCAL_CODEX_LLVM_BASE_URL:-http://127.0.0.1:8000/v1}
       LOCAL_CODEX_LLVM_MODEL: ${LOCAL_CODEX_LLVM_MODEL:-llama3}
       LOCAL_CODEX_USE_LLVM_TOOLCHAIN: ${LOCAL_CODEX_USE_LLVM_TOOLCHAIN:-1}
-      LOCAL_CODEX_TOOLCHAIN_CODEX_PKG: ${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG:-codex:latest}
-      LOCAL_CODEX_TOOLCHAIN_GIT_PKG: ${LOCAL_CODEX_TOOLCHAIN_GIT_PKG:-git:latest}
-      LOCAL_CODEX_TOOLCHAIN_LLVM_PKG: ${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG:-llvm:latest}
-      ToolchainPath: /toolchain-cache
-      ToolchainPullPolicy: Never
+      LOCAL_CODEX_TOOLCHAIN_CODEX_PKG: ${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG:-codex-linux:latest}
+      LOCAL_CODEX_TOOLCHAIN_GIT_PKG: ${LOCAL_CODEX_TOOLCHAIN_GIT_PKG:-git-linux:latest}
+      LOCAL_CODEX_TOOLCHAIN_LLVM_PKG: ${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG:-llvm-linux:latest}
+      ToolchainPath: /opt/toolchain-cache
+      ToolchainRepo: /opt/toolchain-repo
+      ToolchainPullPolicy: IfNotPresent
     volumes:
       - .:/opt/local-codex-kit
       - ${LOCAL_CODEX_WORKSPACE:-.}:/workspace
-      - ${LOCAL_CODEX_TOOLCHAIN_MODULE_PATH_HOST:-C:/Users/sages/Documents/WindowsPowerShell/Modules/Toolchain}:/opt/toolchain-module:ro
-      - ${LOCAL_CODEX_TOOLCHAIN_PATH:-C:/Users/sages/AppData/Local/Toolchain}:/toolchain-cache

@@ -59,9 +59,18 @@ Preview the uninstall without removing anything:
 Build the Docker image if you want a packaged CLI environment:
 
 ```powershell
-docker build -t local-codex-kit .
+.\seed-toolchain-offline.ps1 -Clean
+docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
+
+Default Docker package refs used by this flow:
+
+- `codex-linux:latest`
+- `git-linux:latest`
+- `llvm-linux:latest`
+
+Windows host install (`.\install.ps1`) still uses `codex:latest` / `llvm:latest`.
 
 Inside the container shell:
 
@@ -78,18 +87,27 @@ The container profile maps `codex` to LLVM/vLLM mode with Toolchain enabled by d
 `codex-local`, `codex-qwen`, and `codex-small` are also available.
 `docker compose` is configured with `network_mode: "none"` so the container has no internet access.
 Because networking is disabled, `LOCAL_CODEX_LLVM_BASE_URL` must point to a server running inside the same container namespace (for example `http://127.0.0.1:8000/v1`).
-If you need Toolchain in the container, it mounts:
-
-- Toolchain module: `C:\Users\sages\Documents\WindowsPowerShell\Modules\Toolchain` -> `/opt/toolchain-module`
-- Toolchain cache: `C:\Users\sages\AppData\Local\Toolchain` -> `/toolchain-cache`
+`.\seed-toolchain-offline.ps1` saves Toolchain packages into `.\.toolchain-offline` (gitignored), and Docker copies that folder into `/opt/toolchain-repo` inside the image.
+At runtime, Toolchain is configured with `ToolchainRepo=/opt/toolchain-repo` and `ToolchainPullPolicy=IfNotPresent` so package resolution stays local/offline.
 
 Toolchain package build/push workflow should stay in your `C:\Users\sages\Documents\allsagetech\Toolchains` repo; this kit only consumes already-available packages.
 
-For strict offline runs, set package refs to locally available values (instead of `:latest`) if needed:
+For strict offline runs, pin package refs when seeding:
+
+```powershell
+.\seed-toolchain-offline.ps1 -Clean -CodexPackage codex-linux:latest -GitPackage git-linux:latest -LlvmPackage llvm-linux:latest
+```
+
+Package refs that also control runtime `toolchain exec` in the container:
 
 - `LOCAL_CODEX_TOOLCHAIN_CODEX_PKG`
 - `LOCAL_CODEX_TOOLCHAIN_GIT_PKG`
 - `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG`
+
+Optionally pin Toolchain source for reproducible builds:
+
+- `LOCAL_CODEX_TOOLCHAIN_REPO_URL`
+- `LOCAL_CODEX_TOOLCHAIN_REPO_REF`
 
 If they want to do it manually instead, this is the exact profile snippet:
 
@@ -178,11 +196,12 @@ That is simpler than asking them to hand-edit their profile.
 - `start-codex.ps1`: prints launch info and starts Codex
 - `codex-backend.ps1`: model routing, Git checks, LM Studio integration, and LLVM/vLLM custom-provider integration
 - `bootstrap-toolchain.ps1`: ensures Toolchain is installed, preferring `C:\Users\sages\Documents\allsagetech\Toolchain` or `LOCAL_CODEX_TOOLCHAIN_REPO`
-- `Dockerfile`: builds a PowerShell image with Git and Codex CLI for packaging the kit
-- `docker-entrypoint.ps1`: starts an interactive container shell, loads Toolchain module from mounted module path, and enforces offline Toolchain pull policy
+- `seed-toolchain-offline.ps1`: saves selected Toolchain packages into `.\.toolchain-offline` for Docker offline seeding (defaults: `codex-linux`, `git-linux`, `llvm-linux`)
+- `Dockerfile`: builds a PowerShell image with Git/Codex CLI, installs Toolchain in Linux, and copies `.\.toolchain-offline` into `/opt/toolchain-repo`
+- `docker-entrypoint.ps1`: starts an interactive container shell, loads Toolchain module, and enforces offline Toolchain pull policy
 - `docker-profile.ps1`: maps container commands (`codex`, `codex-llvm`, `codex-vllm`, etc.) to kit presets
 - `docker-lmstudio-bridge.js`: optional host LM Studio bridge helper (not used by default in offline container mode)
-- `docker-compose.yml`: mounts the kit/workspace/toolchain and disables container network access
+- `docker-compose.yml`: mounts the kit/workspace, passes Toolchain build args, and disables container network access
 
 ## Notes
 
