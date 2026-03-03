@@ -195,6 +195,20 @@ if (-not (Test-Path $codexHerePath -PathType Leaf)) {
     throw "Could not find codex-here.ps1 at $codexHerePath"
 }
 
+function Get-PreferredPowerShellPath {
+    $powershell = Get-Command 'powershell.exe' -ErrorAction SilentlyContinue
+    if ($powershell -and $powershell.Source) {
+        return $powershell.Source
+    }
+
+    $powershell = Get-Command 'powershell' -ErrorAction SilentlyContinue
+    if ($powershell -and $powershell.Source) {
+        return $powershell.Source
+    }
+
+    return 'powershell'
+}
+
 $toolchainCodexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { 'codex:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
 $toolchainLlvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
 $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
@@ -213,7 +227,12 @@ if ($DryRun) {
 } else {
     Write-Host ("Ensuring Codex CLI is available through Toolchain package {0}..." -f $toolchainCodexPackage)
     toolchain exec $toolchainCodexPackage {
-        codex --version | Out-Host
+        $codexRunner = Get-Command 'codex.cmd' -ErrorAction SilentlyContinue
+        if ($codexRunner -and $codexRunner.Source) {
+            & $codexRunner.Source --version | Out-Host
+        } else {
+            & codex --version | Out-Host
+        }
     }
     if ($LASTEXITCODE -ne 0) {
         throw "Toolchain failed to provision $toolchainCodexPackage."
@@ -269,10 +288,11 @@ if ((-not (Test-Path $ProfilePath)) -and (-not $DryRun)) {
 
 $startMarker = '# local-codex-kit:start'
 $endMarker = '# local-codex-kit:end'
+$powerShellPath = Get-PreferredPowerShellPath
 $managedBlock = @"
 $startMarker
 function codex {
-    & '$codexHerePath' -Preset $Preset @args
+    & '$powerShellPath' -NoProfile -ExecutionPolicy Bypass -File '$codexHerePath' -Preset $Preset @args
 }
 $endMarker
 "@

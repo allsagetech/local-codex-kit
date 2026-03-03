@@ -39,6 +39,28 @@ function Repair-ToolchainLinuxExecutableBits {
     & $bash.Source -lc $chmodScript
 }
 
+function Test-OpenAiEndpointReachable {
+    param(
+        [string]$BaseUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+        return $false
+    }
+
+    $modelsUrl = $BaseUrl.TrimEnd('/') + '/models'
+    try {
+        $null = Invoke-RestMethod -Method Get -Uri $modelsUrl -TimeoutSec 2
+        return $true
+    } catch {
+        # A non-success status still confirms the endpoint is reachable.
+        if ($_.Exception.Response -ne $null) {
+            return $true
+        }
+        return $false
+    }
+}
+
 $spec = Get-CodexLaunchSpec -ScriptRoot $PSScriptRoot -Mode $Mode -ExtraPrompt $ExtraPrompt -NoPreamble:$NoPreamble -WorkingDirectory $WorkingDirectory -UseToolchain:$UseToolchain -SkipRepoCheck:$SkipRepoCheck
 
 Write-Host ''
@@ -72,6 +94,10 @@ if ($UseToolchain) {
 }
 Write-Host ''
 
+if ($spec.provider -eq 'llvm' -and -not (Test-OpenAiEndpointReachable -BaseUrl $spec.localBaseUrl)) {
+    throw ("LLVM endpoint is not reachable at {0}. Start your local LLVM/vLLM-compatible server, set LOCAL_CODEX_LLVM_BASE_URL, or run codex with -Preset local." -f $spec.localBaseUrl)
+}
+
 if (($spec.resolvedMode -in @('local-balanced', 'local-coder', 'local-small')) -and ($env:LOCAL_CODEX_USE_HOST_LMSTUDIO -ne '1')) {
     Ensure-LocalModel -ModelKey $spec.localModelKey -Identifier $spec.localIdentifier -ContextLength $spec.contextLength
 }
@@ -89,7 +115,7 @@ if ($UseToolchain) {
             $codexPath = $spec.codexPath.Replace("'", "''")
             $scriptText = "`$codexArgs = @($argLiteral)`n& '$codexPath' @codexArgs"
         } else {
-            $scriptText = "`$codexArgs = @($argLiteral)`ncodex @codexArgs"
+            $scriptText = "`$codexArgs = @($argLiteral)`n`$codexCmd = Get-Command 'codex.cmd' -ErrorAction SilentlyContinue`nif (`$codexCmd -and `$codexCmd.Source) { & `$codexCmd.Source @codexArgs } else { codex @codexArgs }"
         }
         $scriptBlock = [scriptblock]::Create($scriptText)
 
@@ -106,7 +132,10 @@ if ($UseToolchain) {
             $toolchainPackages += $llvmPackage
         }
 
-        toolchain pull @toolchainPackages | Out-Host
+        $pullPolicy = if ([string]::IsNullOrWhiteSpace($env:ToolchainPullPolicy)) { 'IfNotPresent' } else { $env:ToolchainPullPolicy }
+        if ($pullPolicy -eq 'Always') {
+            toolchain pull @toolchainPackages | Out-Host
+        }
         Repair-ToolchainLinuxExecutableBits
         toolchain exec @toolchainPackages $scriptBlock
     } finally {
