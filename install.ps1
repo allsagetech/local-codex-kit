@@ -1,6 +1,6 @@
 param(
     [string]$KitPath = $PSScriptRoot,
-    [ValidateSet('local', 'qwen', 'small')]
+    [ValidateSet('local', 'qwen', 'small', 'llvm', 'vllm')]
     [string]$Preset = 'local',
     [ValidateSet('prompt', 'default', 'interactive', 'skip')]
     [string]$ModelSetup = 'prompt',
@@ -10,6 +10,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$usesLmStudioPreset = $Preset -in @('local', 'qwen', 'small')
+$usesLlvmPreset = $Preset -in @('llvm', 'vllm')
 
 function Get-ExternalCommand {
     param(
@@ -193,6 +195,10 @@ if (-not (Test-Path $codexHerePath -PathType Leaf)) {
     throw "Could not find codex-here.ps1 at $codexHerePath"
 }
 
+$toolchainCodexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { 'codex:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
+$toolchainLlvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
+$useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
+
 if ($DryRun) {
     Invoke-DryRunStep 'Would install Toolchain if missing.'
 } else {
@@ -200,24 +206,57 @@ if ($DryRun) {
 }
 
 if ($DryRun) {
-    Invoke-DryRunStep 'Would ensure Codex CLI is available through Toolchain codex:latest.'
+    Invoke-DryRunStep ("Would ensure Codex CLI is available through Toolchain package {0}." -f $toolchainCodexPackage)
+    if ($useLlvmToolchain) {
+        Invoke-DryRunStep ("Would ensure LLVM is available through Toolchain package {0}." -f $toolchainLlvmPackage)
+    }
 } else {
-    Write-Host 'Ensuring Codex CLI is available through Toolchain...'
-    toolchain exec codex:latest {
+    Write-Host ("Ensuring Codex CLI is available through Toolchain package {0}..." -f $toolchainCodexPackage)
+    toolchain exec $toolchainCodexPackage {
         codex --version | Out-Host
     }
     if ($LASTEXITCODE -ne 0) {
-        throw 'Toolchain failed to provision codex:latest.'
+        throw "Toolchain failed to provision $toolchainCodexPackage."
+    }
+
+    if ($useLlvmToolchain) {
+        Write-Host ("Ensuring LLVM is available through Toolchain package {0}..." -f $toolchainLlvmPackage)
+        toolchain exec $toolchainLlvmPackage {
+            clang --version | Out-Host
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Toolchain failed to provision $toolchainLlvmPackage."
+        }
     }
 }
 
-if (-not (Test-LmStudioDesktopInstalled)) {
-    Install-LmStudioDesktop
+$modelSetupResult = 'not-applicable'
+if ($usesLmStudioPreset) {
+    if (-not (Test-LmStudioDesktopInstalled)) {
+        Install-LmStudioDesktop
+    }
+
+    Ensure-LmStudioCli
+    $modelSetupResult = Invoke-LmStudioModelSetup -Mode $ModelSetup
+} elseif ($usesLlvmPreset) {
+    $llvmBaseUrl = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_BASE_URL)) { 'http://127.0.0.1:8000/v1' } else { $env:LOCAL_CODEX_LLVM_BASE_URL }
+    $llvmModel = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_MODEL)) { 'llama3' } else { $env:LOCAL_CODEX_LLVM_MODEL }
+    $llvmApiKeyEnv = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_API_KEY_ENV)) { 'LOCAL_CODEX_LLVM_API_KEY' } else { $env:LOCAL_CODEX_LLVM_API_KEY_ENV }
+
+    if ($DryRun) {
+        Invoke-DryRunStep 'Would skip LM Studio setup for LLVM preset.'
+        Invoke-DryRunStep ("Would use LLVM server base URL: {0}" -f $llvmBaseUrl)
+        Invoke-DryRunStep ("Would use LLVM model slug: {0}" -f $llvmModel)
+        Invoke-DryRunStep ("Would use LLVM API key env var: {0} (defaults to ''local'' when launching)" -f $llvmApiKeyEnv)
+    } else {
+        Write-Host 'LLVM preset selected. LM Studio setup is skipped.'
+        Write-Host ("LLVM server base URL: {0}" -f $llvmBaseUrl)
+        Write-Host ("LLVM model slug: {0}" -f $llvmModel)
+        Write-Host ("LLVM API key env var: {0} (defaults to 'local' when launching)" -f $llvmApiKeyEnv)
+    }
+
+    $modelSetupResult = 'external (LLVM server)'
 }
-
-Ensure-LmStudioCli
-
-$modelSetupResult = Invoke-LmStudioModelSetup -Mode $ModelSetup
 
 $profileDir = Split-Path -Parent $ProfilePath
 if ($profileDir -and -not (Test-Path $profileDir)) {
@@ -238,7 +277,7 @@ function codex {
 $endMarker
 "@
 
-$existingProfile = Get-Content $ProfilePath -Raw
+$existingProfile = if (Test-Path $ProfilePath) { Get-Content $ProfilePath -Raw } else { '' }
 $escapedStart = [regex]::Escape($startMarker)
 $escapedEnd = [regex]::Escape($endMarker)
 $managedPattern = "(?s)$escapedStart.*?$escapedEnd"
@@ -265,11 +304,24 @@ Write-Host 'local-codex-kit installed into PowerShell profile:'
 Write-Host ("- Kit path: {0}" -f $resolvedKitPath)
 Write-Host ("- Default preset: {0}" -f $Preset)
 Write-Host ("- Profile: {0}" -f $ProfilePath)
-Write-Host '- Codex CLI: available through Toolchain codex:latest'
+Write-Host ("- Codex CLI package: {0}" -f $toolchainCodexPackage)
+if ($useLlvmToolchain) {
+    Write-Host ("- LLVM package: {0}" -f $toolchainLlvmPackage)
+}
 Write-Host '- Toolchain: installed or already present'
-Write-Host '- LM Studio desktop: installed or already present'
-Write-Host '- LM Studio CLI: available or bootstrapped'
-Write-Host ("- LM Studio models: {0}" -f $modelSetupResult)
+if ($usesLmStudioPreset) {
+    Write-Host '- LM Studio desktop: installed or already present'
+    Write-Host '- LM Studio CLI: available or bootstrapped'
+    Write-Host ("- LM Studio models: {0}" -f $modelSetupResult)
+} elseif ($usesLlvmPreset) {
+    $llvmBaseUrl = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_BASE_URL)) { 'http://127.0.0.1:8000/v1' } else { $env:LOCAL_CODEX_LLVM_BASE_URL }
+    $llvmModel = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_MODEL)) { 'llama3' } else { $env:LOCAL_CODEX_LLVM_MODEL }
+    $llvmApiKeyEnv = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_API_KEY_ENV)) { 'LOCAL_CODEX_LLVM_API_KEY' } else { $env:LOCAL_CODEX_LLVM_API_KEY_ENV }
+    Write-Host ("- LLVM server URL: {0}" -f $llvmBaseUrl)
+    Write-Host ("- LLVM model: {0}" -f $llvmModel)
+    Write-Host ("- LLVM API key env: {0}" -f $llvmApiKeyEnv)
+    Write-Host ("- LLVM model setup: {0}" -f $modelSetupResult)
+}
 Write-Host ("- Dry run: {0}" -f $(if ($DryRun) { 'yes' } else { 'no' }))
 Write-Host ''
 Write-Host 'Next steps:'

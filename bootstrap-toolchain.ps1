@@ -4,7 +4,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$toolchainRoot = Join-Path $PSScriptRoot 'Toolchain'
+$toolchainCandidates = @()
+if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_REPO)) {
+    $toolchainCandidates += $env:LOCAL_CODEX_TOOLCHAIN_REPO
+}
+$toolchainCandidates += @(
+    'C:\Users\sages\Documents\allsagetech\Toolchain',
+    (Join-Path (Split-Path $PSScriptRoot -Parent) 'Toolchain'),
+    (Join-Path $PSScriptRoot 'Toolchain')
+)
+
+$toolchainRoot = $null
+foreach ($candidate in $toolchainCandidates) {
+    $candidateInstaller = Join-Path $candidate 'install.ps1'
+    if (Test-Path $candidateInstaller) {
+        $toolchainRoot = $candidate
+        break
+    }
+}
+
+if (-not $toolchainRoot) {
+    $toolchainRoot = Join-Path $PSScriptRoot 'Toolchain'
+}
+
 $installer = Join-Path $toolchainRoot 'install.ps1'
 $module = Get-Module -ListAvailable Toolchain | Sort-Object Version -Descending | Select-Object -First 1
 
@@ -38,3 +60,4 @@ Get-Command toolchain -ErrorAction Stop | Out-Null
 
 $installed = Get-Module -ListAvailable Toolchain | Sort-Object Version -Descending | Select-Object -First 1
 Write-Host ("Toolchain ready: " + $installed.Version)
+Write-Host ("Toolchain repo: " + $toolchainRoot)

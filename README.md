@@ -12,13 +12,16 @@ cd D:\local-codex-kit
 . $PROFILE
 ```
 
-That installs Toolchain if needed, ensures the Toolchain `codex:latest` package is available, installs LM Studio desktop if needed, bootstraps the LM Studio CLI if needed, downloads the default models, and writes a managed `codex` function into their PowerShell profile that points at this kit.
+That installs Toolchain if needed, ensures the Toolchain `codex:latest` package is available, and writes a managed `codex` function into their PowerShell profile that points at this kit. For LM Studio presets it also installs/bootstraps LM Studio and downloads default models.
+
+This kit now prefers an existing Toolchain repo at `C:\Users\sages\Documents\allsagetech\Toolchain` (or `LOCAL_CODEX_TOOLCHAIN_REPO`) before cloning anything.
 
 Install a different default preset if needed:
 
 ```powershell
 .\install.ps1 -Preset qwen
 .\install.ps1 -Preset small
+.\install.ps1 -Preset llvm
 ```
 
 Skip the default model downloads if needed:
@@ -89,13 +92,11 @@ codex
 ## What they need installed
 
 - Git in PATH
-- LM Studio desktop will be installed by `.\install.ps1` if it is missing
 - Toolchain will be installed by `.\install.ps1` if it is missing
 - the Toolchain `codex:latest` package will be fetched by `.\install.ps1`
-- the Toolchain `lmstudio:latest` package is used to bootstrap `lms` if needed
-- the default model downloads are `openai/gpt-oss-20b` and `qwen2.5-coder-32b-instruct`
-- the smaller model option is `qwen2.5-coder-7b-instruct`
-- by default, `.\install.ps1` prompts for default downloads, interactive selection, or skip
+- the Toolchain `llvm:latest` package will be fetched by `.\install.ps1` (disable with `LOCAL_CODEX_USE_LLVM_TOOLCHAIN=0`)
+- for `local`, `qwen`, or `small` presets: LM Studio desktop will be installed if missing, `lmstudio:latest` can bootstrap `lms`, and default models are downloaded
+- for `llvm`/`vllm` preset: run your local LLVM/vLLM-compatible server separately (default endpoint `http://127.0.0.1:8000/v1`)
 
 ## What `codex` does here
 
@@ -110,6 +111,15 @@ Other options:
 
 - `codex -Preset qwen`
 - `codex -Preset small`
+- `codex -Preset llvm` (alias: `codex -Preset vllm`)
+
+LLVM/vLLM route defaults:
+
+- provider: `llvm`
+- base URL env: `LOCAL_CODEX_LLVM_BASE_URL` (default `http://127.0.0.1:8000/v1`)
+- model env: `LOCAL_CODEX_LLVM_MODEL` (default `llama3`)
+- API key env name: `LOCAL_CODEX_LLVM_API_KEY_ENV` (default `LOCAL_CODEX_LLVM_API_KEY`)
+- Toolchain package envs: `LOCAL_CODEX_TOOLCHAIN_CODEX_PKG` / `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG`
 
 ## Expected startup output
 
@@ -125,12 +135,18 @@ Then the Codex TUI should open with:
 
 - `model: gpt-oss-20b`
 
+For LLVM/vLLM mode, startup should show:
+
+- `Provider: llvm`
+- `LLVM endpoint: http://127.0.0.1:8000/v1` (or your override)
+- `Codex model slug: <your LLVM model>`
+
 ## Best way to share this
 
 The fastest path is:
 
 1. Give them the whole `D:\local-codex-kit` folder.
-2. Tell them to run `.\install.ps1` or `.\install.ps1 -Preset qwen`.
+2. Tell them to run `.\install.ps1`, `.\install.ps1 -Preset qwen`, `.\install.ps1 -Preset small`, or `.\install.ps1 -Preset llvm`.
 3. For lower-memory machines, tell them to use `.\install.ps1 -Preset small`.
 4. Tell them to run `. $PROFILE`.
 5. Tell them to run `codex` inside a Git repo.
@@ -139,12 +155,12 @@ That is simpler than asking them to hand-edit their profile.
 
 ## Files that matter
 
-- `codex-here.ps1`: entry point with `local`, `qwen`, and `small`
-- `install.ps1`: installs Toolchain, ensures `codex:latest` is available, installs LM Studio if needed, bootstraps `lms`, downloads the default models, and sets the default preset
+- `codex-here.ps1`: entry point with `local`, `qwen`, `small`, and `llvm`/`vllm`
+- `install.ps1`: installs Toolchain, ensures `codex:latest` and `llvm:latest` are available, configures either LM Studio presets or LLVM preset, and sets the default preset
 - `delete.ps1`: removes the managed profile block and can remove Toolchain, LM Studio, and downloaded models
 - `start-codex.ps1`: prints launch info and starts Codex
-- `codex-backend.ps1`: model routing, Git checks, and LM Studio integration
-- `bootstrap-toolchain.ps1`: ensures Toolchain is installed
+- `codex-backend.ps1`: model routing, Git checks, LM Studio integration, and LLVM/vLLM custom-provider integration
+- `bootstrap-toolchain.ps1`: ensures Toolchain is installed, preferring `C:\Users\sages\Documents\allsagetech\Toolchain` or `LOCAL_CODEX_TOOLCHAIN_REPO`
 - `Dockerfile`: builds a PowerShell image with Git and Codex CLI for packaging the kit
 - `docker-entrypoint.ps1`: starts an interactive container shell in the mounted workspace
 - `docker-profile.ps1`: makes `codex`, `codex-qwen`, and `codex-small` use the local LM Studio-backed wrappers inside the container

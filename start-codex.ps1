@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("local-balanced", "local-coder", "local-small", "auto")]
+    [ValidateSet("local-balanced", "local-coder", "local-small", "local-llvm", "auto")]
     [string]$Mode = "local-balanced",
     [string]$ExtraPrompt = "",
     [switch]$NoPreamble,
@@ -24,11 +24,23 @@ if ($spec.localModelKey) {
     Write-Host ("- LM Studio model: {0}" -f $spec.localModelKey)
     Write-Host ("- LM Studio identifier: {0}" -f $spec.localIdentifier)
 }
+if ($spec.provider -eq 'llvm') {
+    Write-Host ("- LLVM endpoint: {0}" -f $spec.localBaseUrl)
+    Write-Host ("- LLVM API key env: {0}" -f $spec.localApiKeyEnv)
+    Write-Host ("- LLVM wire API: {0}" -f $spec.localWireApi)
+}
 if ($spec.metadataNote) {
     Write-Host ("- Codex CLI metadata: {0}" -f $spec.metadataNote)
 }
 Write-Host ("- Working directory: {0}" -f $spec.workingDirectory)
 Write-Host ("- Toolchain: {0}" -f $(if ($UseToolchain) { 'enabled' } else { 'disabled' }))
+if ($UseToolchain) {
+    $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
+    if ($useLlvmToolchain) {
+        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
+        Write-Host ("- Toolchain LLVM package: {0}" -f $llvmPackage)
+    }
+}
 Write-Host ''
 
 if (($spec.resolvedMode -in @('local-balanced', 'local-coder', 'local-small')) -and ($env:LOCAL_CODEX_USE_HOST_LMSTUDIO -ne '1')) {
@@ -51,7 +63,17 @@ if ($UseToolchain) {
             $scriptText = "`$codexArgs = @($argLiteral)`ncodex @codexArgs"
         }
         $scriptBlock = [scriptblock]::Create($scriptText)
-        toolchain exec codex:latest git:latest $scriptBlock
+
+        $codexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { 'codex:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
+        $gitPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG)) { 'git:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG }
+        $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
+        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { 'llvm:latest' } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
+        $toolchainPackages = @($codexPackage, $gitPackage)
+        if ($useLlvmToolchain) {
+            $toolchainPackages += $llvmPackage
+        }
+
+        toolchain exec @toolchainPackages $scriptBlock
     } finally {
         Pop-Location
     }

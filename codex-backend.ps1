@@ -5,11 +5,19 @@ function Get-LmsCommand {
 
 function Get-CodexCommand {
     $commands = @(Get-Command codex -All -ErrorAction SilentlyContinue)
+
     foreach ($command in $commands) {
-        if ($command.CommandType -in @('Application', 'ExternalScript')) {
+        if ($command.CommandType -eq 'Application') {
             return $command
         }
     }
+
+    foreach ($command in $commands) {
+        if ($command.CommandType -eq 'ExternalScript') {
+            return $command
+        }
+    }
+
     return $commands | Select-Object -First 1
 }
 
@@ -163,7 +171,7 @@ function Get-CodexPromptText {
 
 function Resolve-CodexMode {
     param(
-        [ValidateSet('local-balanced', 'local-coder', 'local-small', 'auto')]
+        [ValidateSet('local-balanced', 'local-coder', 'local-small', 'local-llvm', 'auto')]
         [string]$Mode,
         [string]$ExtraPrompt
     )
@@ -177,7 +185,7 @@ function Resolve-CodexMode {
 function Get-CodexLaunchSpec {
     param(
         [string]$ScriptRoot,
-        [ValidateSet('local-balanced', 'local-coder', 'local-small', 'auto')]
+        [ValidateSet('local-balanced', 'local-coder', 'local-small', 'local-llvm', 'auto')]
         [string]$Mode,
         [string]$ExtraPrompt,
         [bool]$NoPreamble,
@@ -201,6 +209,9 @@ function Get-CodexLaunchSpec {
     $localModelKey = 'openai/gpt-oss-20b'
     $localIdentifier = $model
     $contextLength = 24576
+    $localBaseUrl = $null
+    $localApiKeyEnv = $null
+    $localWireApi = $null
     $args = @()
 
     switch ($resolvedMode) {
@@ -227,6 +238,37 @@ function Get-CodexLaunchSpec {
             $metadataNote = 'Codex CLI fallback metadata is expected for this local alias.'
             $args += @('--oss', '--local-provider', 'lmstudio', '-m', $model)
         }
+        'local-llvm' {
+            $provider = 'llvm'
+            $model = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_MODEL)) { 'llama3' } else { $env:LOCAL_CODEX_LLVM_MODEL }
+            $displayModel = 'Local LLVM/vLLM Server'
+            $metadataNote = 'Codex CLI fallback metadata is expected for this custom local provider.'
+            $localModelKey = $null
+            $localIdentifier = $null
+            $contextLength = 32768
+            $localBaseUrl = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_BASE_URL)) { 'http://127.0.0.1:8000/v1' } else { $env:LOCAL_CODEX_LLVM_BASE_URL }
+            $localApiKeyEnv = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLVM_API_KEY_ENV)) { 'LOCAL_CODEX_LLVM_API_KEY' } else { $env:LOCAL_CODEX_LLVM_API_KEY_ENV }
+            $localWireApi = 'responses'
+
+            if ([string]::IsNullOrWhiteSpace([System.Environment]::GetEnvironmentVariable($localApiKeyEnv, 'Process'))) {
+                Set-Item -Path ("Env:{0}" -f $localApiKeyEnv) -Value 'local'
+            }
+
+            $providerName = 'LLVM Local'
+            $escapedProviderName = $providerName.Replace("'", "''")
+            $escapedBaseUrl = $localBaseUrl.Replace("'", "''")
+            $escapedApiKeyEnv = $localApiKeyEnv.Replace("'", "''")
+            $escapedWireApi = $localWireApi.Replace("'", "''")
+
+            $args += @(
+                '-c', "model_provider=llvm",
+                '-c', ("model_providers.llvm.name='{0}'" -f $escapedProviderName),
+                '-c', ("model_providers.llvm.base_url='{0}'" -f $escapedBaseUrl),
+                '-c', ("model_providers.llvm.env_key='{0}'" -f $escapedApiKeyEnv),
+                '-c', ("model_providers.llvm.wire_api='{0}'" -f $escapedWireApi),
+                '-m', $model
+            )
+        }
     }
 
     $args += @('--sandbox', 'workspace-write', '-a', 'on-request', '-C', $WorkingDirectory)
@@ -243,6 +285,9 @@ function Get-CodexLaunchSpec {
         metadataNote = $metadataNote
         localModelKey = $localModelKey
         localIdentifier = $localIdentifier
+        localBaseUrl = $localBaseUrl
+        localApiKeyEnv = $localApiKeyEnv
+        localWireApi = $localWireApi
         contextLength = $contextLength
         workingDirectory = $WorkingDirectory
         useToolchain = $UseToolchain
