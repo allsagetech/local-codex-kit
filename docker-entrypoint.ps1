@@ -25,6 +25,7 @@ $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN = if ($env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN) {
 $env:LOCAL_CODEX_LLVM_BASE_URL = if ($env:LOCAL_CODEX_LLVM_BASE_URL) { $env:LOCAL_CODEX_LLVM_BASE_URL } else { 'http://127.0.0.1:8000/v1' }
 $env:LOCAL_CODEX_LLVM_WIRE_API = if ($env:LOCAL_CODEX_LLVM_WIRE_API) { $env:LOCAL_CODEX_LLVM_WIRE_API } else { 'chat' }
 $env:LOCAL_CODEX_EMBEDDED_PORT = if ($env:LOCAL_CODEX_EMBEDDED_PORT) { $env:LOCAL_CODEX_EMBEDDED_PORT } else { '8000' }
+$env:LOCAL_CODEX_EMBEDDED_REQUIRE_READY = if ($env:LOCAL_CODEX_EMBEDDED_REQUIRE_READY) { $env:LOCAL_CODEX_EMBEDDED_REQUIRE_READY } else { '0' }
 
 if (-not $env:LOCAL_CODEX_EMBEDDED_MODEL_PATH) {
     $detectedModel = Get-FirstEmbeddedModelPath
@@ -86,18 +87,31 @@ if (-not (Test-Path $workspace)) {
 Set-Location $workspace
 
 $embeddedServerInfo = $null
+$embeddedStartupError = $null
 if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
     $starterScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'start-embedded-llm.ps1'
     if (-not (Test-Path -LiteralPath $starterScript)) {
         throw "Embedded model starter script not found: $starterScript"
     }
 
-    $embeddedServerInfo = & $starterScript
-    if ($embeddedServerInfo.baseUrl) {
-        $env:LOCAL_CODEX_LLVM_BASE_URL = [string]$embeddedServerInfo.baseUrl
-    }
-    if ($embeddedServerInfo.modelAlias) {
-        $env:LOCAL_CODEX_LLVM_MODEL = [string]$embeddedServerInfo.modelAlias
+    try {
+        $embeddedServerInfo = & $starterScript
+        if ($embeddedServerInfo.baseUrl) {
+            $env:LOCAL_CODEX_LLVM_BASE_URL = [string]$embeddedServerInfo.baseUrl
+        }
+        if ($embeddedServerInfo.modelAlias) {
+            $env:LOCAL_CODEX_LLVM_MODEL = [string]$embeddedServerInfo.modelAlias
+        }
+    } catch {
+        $embeddedStartupError = $_.Exception.Message
+        $env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE = '0'
+
+        if ($env:LOCAL_CODEX_EMBEDDED_REQUIRE_READY -eq '1') {
+            throw
+        }
+
+        Write-Warning 'Embedded llama-server failed to start. Continuing without the embedded endpoint.'
+        Write-Warning $embeddedStartupError
     }
 }
 
@@ -121,6 +135,8 @@ if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
     if ($embeddedServerInfo -and $embeddedServerInfo.started -and $embeddedServerInfo.processId) {
         Write-Host ("- Embedded model server PID: {0}" -f $embeddedServerInfo.processId)
     }
+} elseif ($embeddedStartupError) {
+    Write-Host '- Embedded model startup: failed; shell fallback enabled'
 }
 Write-Host '- Runtime state stays in Docker-managed volumes for the workspace, models, Toolchain cache, and Codex config.'
 Write-Host '- Put your project under /workspace before running codex for repo-aware behavior.'

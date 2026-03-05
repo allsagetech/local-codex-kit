@@ -31,6 +31,7 @@ codex-vllm
 `codex` defaults to the embedded LLVM/vLLM-compatible endpoint at `http://127.0.0.1:8000/v1`.
 `docker compose` is configured with `network_mode: "none"` at runtime, so the container has no external network access after startup.
 If you build without a model, the shell still starts, but `codex` will not work until `/opt/models` contains a GGUF model or `LOCAL_CODEX_LLVM_BASE_URL` points at another in-container endpoint.
+If embedded `llama-server` startup fails, the container now drops you into the shell with the recent server logs instead of exiting immediately. Increase `LOCAL_CODEX_EMBEDDED_STARTUP_TIMEOUT_SEC` if your model is slow to load on CPU, or set `LOCAL_CODEX_EMBEDDED_REQUIRE_READY=1` to keep fail-fast behavior.
 For repo-aware sessions, put a Git repo or project directory under `/workspace` before launching `codex`.
 
 ## Importing code into the workspace

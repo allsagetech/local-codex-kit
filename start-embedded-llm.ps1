@@ -35,13 +35,41 @@ function Test-EmbeddedEndpointReady {
         [string]$BaseUrl
     )
 
-    try {
-        $uri = $BaseUrl.TrimEnd('/') + '/models'
-        $null = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec 2
-        return $true
-    } catch {
-        return $false
+    $base = $BaseUrl.TrimEnd('/')
+    $root = $base
+    if ($base.EndsWith('/v1')) {
+        $root = $base.Substring(0, $base.Length - 3).TrimEnd('/')
     }
+
+    $candidates = @(
+        "$base/models",
+        "$root/models",
+        "$root/v1/models"
+    ) | Select-Object -Unique
+
+    foreach ($uri in $candidates) {
+        try {
+            $null = Invoke-RestMethod -Method Get -Uri $uri -TimeoutSec 2
+            return $true
+        } catch {
+            continue
+        }
+    }
+
+    return $false
+}
+
+function Get-LogTail {
+    param(
+        [string]$Path,
+        [int]$Lines = 40
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return ''
+    }
+
+    return ((Get-Content -LiteralPath $Path -Tail $Lines) -join "`n").Trim()
 }
 
 if ([string]::IsNullOrWhiteSpace($ModelPath)) {
@@ -65,7 +93,7 @@ if ($GpuLayers -eq 0 -and -not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_EMB
     $GpuLayers = Get-EnvInt -Name 'LOCAL_CODEX_EMBEDDED_GPU_LAYERS' -DefaultValue 0
 }
 if ($StartupTimeoutSec -le 0) {
-    $StartupTimeoutSec = Get-EnvInt -Name 'LOCAL_CODEX_EMBEDDED_STARTUP_TIMEOUT_SEC' -DefaultValue 120
+    $StartupTimeoutSec = Get-EnvInt -Name 'LOCAL_CODEX_EMBEDDED_STARTUP_TIMEOUT_SEC' -DefaultValue 300
 }
 
 if ([string]::IsNullOrWhiteSpace($ModelAlias)) {
@@ -142,12 +170,16 @@ if (-not $proc.HasExited) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 }
 
-$stderrTail = ''
-if (Test-Path -LiteralPath $errLog) {
-    $stderrTail = ((Get-Content -LiteralPath $errLog -Tail 40) -join "`n").Trim()
-}
+$stdoutTail = Get-LogTail -Path $outLog -Lines 40
+$stderrTail = Get-LogTail -Path $errLog -Lines 40
 
 $message = "Embedded llama-server failed to become ready at $baseUrl within $StartupTimeoutSec seconds."
+$message += "`n`nCommand: $($llamaServer.Source) $($argumentList -join ' ')"
+$message += "`nStdout log: $outLog"
+$message += "`nStderr log: $errLog"
+if ($stdoutTail) {
+    $message += "`n`nRecent stdout:`n$stdoutTail"
+}
 if ($stderrTail) {
     $message += "`n`nRecent stderr:`n$stderrTail"
 }
