@@ -3,7 +3,7 @@ FROM ubuntu:22.04 AS base
 WORKDIR /opt/local-codex-kit
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl git ca-certificates wget apt-transport-https software-properties-common gnupg libgomp1 \
+    && apt-get install -y --no-install-recommends curl git clang lld ca-certificates wget apt-transport-https software-properties-common gnupg libgomp1 \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb \
@@ -37,9 +37,9 @@ FROM base AS toolchain-seed
 
 ARG TOOLCHAIN_REPO_URL=https://github.com/allsagetech/Toolchain.git
 ARG TOOLCHAIN_REPO_REF=main
-ARG LOCAL_CODEX_TOOLCHAIN_CODEX_PKG=codex-linux:latest
-ARG LOCAL_CODEX_TOOLCHAIN_GIT_PKG=git-linux:latest
-ARG LOCAL_CODEX_TOOLCHAIN_LLVM_PKG=llvm-linux:latest
+ARG LOCAL_CODEX_TOOLCHAIN_CODEX_PKG=codex:codex-0.106.0-linux
+ARG LOCAL_CODEX_TOOLCHAIN_GIT_PKG=
+ARG LOCAL_CODEX_TOOLCHAIN_LLVM_PKG=
 
 RUN git clone --depth 1 --branch "${TOOLCHAIN_REPO_REF}" "${TOOLCHAIN_REPO_URL}" /tmp/Toolchain \
     && pwsh -NoLogo -NoProfile -Command "\
@@ -61,9 +61,8 @@ RUN pwsh -NoLogo -NoProfile -Command "\
         \$env:PSModulePath = '/opt/powershell-modules:' + \$env:PSModulePath; \
         Import-Module Toolchain -Force; \
         New-Item -ItemType Directory -Path /opt/toolchain-repo -Force | Out-Null; \
-        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG}' /opt/toolchain-repo | Out-Host; \
-        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_GIT_PKG}' /opt/toolchain-repo | Out-Host; \
-        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG}' /opt/toolchain-repo | Out-Host \
+        \$packages = @('${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG}', '${LOCAL_CODEX_TOOLCHAIN_GIT_PKG}', '${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG}') | Where-Object { -not [string]::IsNullOrWhiteSpace(\$_) -and \$_ -ne 'none' }; \
+        foreach (\$package in \$packages) { toolchain save -Index \$package /opt/toolchain-repo | Out-Host } \
     "
 
 FROM base AS final

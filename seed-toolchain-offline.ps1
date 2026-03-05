@@ -1,8 +1,8 @@
 param(
     [string]$OutputPath = (Join-Path $PSScriptRoot '.toolchain-offline'),
-    [string]$CodexPackage = 'codex-linux:latest',
-    [string]$GitPackage = 'git-linux:latest',
-    [string]$LlvmPackage = 'llvm-linux:latest',
+    [string]$CodexPackage = 'codex:codex-0.106.0-linux',
+    [string]$GitPackage = '',
+    [string]$LlvmPackage = '',
     [switch]$Clean
 )
 
@@ -23,7 +23,7 @@ if (-not (Test-Path $OutputPath)) {
 }
 
 $resolvedOutput = (Resolve-Path $OutputPath).Path
-$packages = @($CodexPackage, $GitPackage, $LlvmPackage)
+$packages = @($CodexPackage, $GitPackage, $LlvmPackage) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_ -ne 'none' }
 
 foreach ($package in $packages) {
     Write-Host ("Saving Toolchain package {0} -> {1}" -f $package, $resolvedOutput)
@@ -34,6 +34,6 @@ Write-Host ''
 Write-Host 'Toolchain offline repo ready for Docker build:'
 Write-Host ("- Path: {0}" -f $resolvedOutput)
 Write-Host '- Package refs:'
-Write-Host ("  - {0}" -f $CodexPackage)
-Write-Host ("  - {0}" -f $GitPackage)
-Write-Host ("  - {0}" -f $LlvmPackage)
+foreach ($package in $packages) {
+    Write-Host ("  - {0}" -f $package)
+}

@@ -39,6 +39,42 @@ function Repair-ToolchainLinuxExecutableBits {
     & $bash.Source -lc $chmodScript
 }
 
+function Resolve-OptionalToolchainPackage {
+    param(
+        [string]$EnvVarName,
+        [string]$DefaultPackage
+    )
+
+    $raw = [System.Environment]::GetEnvironmentVariable($EnvVarName, 'Process')
+    if ($null -ne $raw) {
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw -eq 'none') {
+            return $null
+        }
+
+        return $raw
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DefaultPackage)) {
+        return $null
+    }
+
+    return $DefaultPackage
+}
+
+function Test-OptionalToolchainToggle {
+    param(
+        [string]$EnvVarName,
+        [bool]$DefaultEnabled
+    )
+
+    $raw = [System.Environment]::GetEnvironmentVariable($EnvVarName, 'Process')
+    if ($null -eq $raw) {
+        return $DefaultEnabled
+    }
+
+    return $raw -ne '0'
+}
+
 function Test-OpenAiEndpointReachable {
     param(
         [string]$BaseUrl
@@ -89,11 +125,15 @@ if ($spec.metadataNote) {
 Write-Host ("- Working directory: {0}" -f $spec.workingDirectory)
 Write-Host ("- Toolchain: {0}" -f $(if ($UseToolchain) { 'enabled' } else { 'disabled' }))
 if ($UseToolchain) {
-    $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
+    $useLlvmToolchain = Test-OptionalToolchainToggle -EnvVarName 'LOCAL_CODEX_USE_LLVM_TOOLCHAIN' -DefaultEnabled:(-not $IsLinux)
     if ($useLlvmToolchain) {
-        $defaultLlvmPkgForHost = if ($IsLinux) { 'llvm-linux:latest' } else { 'llvm:latest' }
-        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { $defaultLlvmPkgForHost } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
-        Write-Host ("- Toolchain LLVM package: {0}" -f $llvmPackage)
+        $defaultLlvmPkgForHost = if ($IsLinux) { $null } else { 'llvm:latest' }
+        $llvmPackage = Resolve-OptionalToolchainPackage -EnvVarName 'LOCAL_CODEX_TOOLCHAIN_LLVM_PKG' -DefaultPackage $defaultLlvmPkgForHost
+        if ($llvmPackage) {
+            Write-Host ("- Toolchain LLVM package: {0}" -f $llvmPackage)
+        } elseif ($IsLinux) {
+            Write-Host '- Toolchain LLVM package: disabled (using system clang)'
+        }
     }
 }
 Write-Host ''
@@ -127,16 +167,19 @@ if ($UseToolchain) {
         }
         $scriptBlock = [scriptblock]::Create($scriptText)
 
-        $defaultCodexPkg = if ($IsLinux) { 'codex-linux:latest' } else { 'codex:latest' }
-        $defaultGitPkg = if ($IsLinux) { 'git-linux:latest' } else { 'git:latest' }
-        $defaultLlvmPkg = if ($IsLinux) { 'llvm-linux:latest' } else { 'llvm:latest' }
+        $defaultCodexPkg = if ($IsLinux) { 'codex:codex-0.106.0-linux' } else { 'codex:latest' }
+        $defaultGitPkg = if ($IsLinux) { $null } else { 'git:latest' }
+        $defaultLlvmPkg = if ($IsLinux) { $null } else { 'llvm:latest' }
 
         $codexPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG)) { $defaultCodexPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_CODEX_PKG }
-        $gitPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG)) { $defaultGitPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_GIT_PKG }
-        $useLlvmToolchain = $env:LOCAL_CODEX_USE_LLVM_TOOLCHAIN -ne '0'
-        $llvmPackage = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG)) { $defaultLlvmPkg } else { $env:LOCAL_CODEX_TOOLCHAIN_LLVM_PKG }
-        $toolchainPackages = @($codexPackage, $gitPackage)
-        if ($useLlvmToolchain) {
+        $gitPackage = Resolve-OptionalToolchainPackage -EnvVarName 'LOCAL_CODEX_TOOLCHAIN_GIT_PKG' -DefaultPackage $defaultGitPkg
+        $useLlvmToolchain = Test-OptionalToolchainToggle -EnvVarName 'LOCAL_CODEX_USE_LLVM_TOOLCHAIN' -DefaultEnabled:(-not $IsLinux)
+        $llvmPackage = Resolve-OptionalToolchainPackage -EnvVarName 'LOCAL_CODEX_TOOLCHAIN_LLVM_PKG' -DefaultPackage $defaultLlvmPkg
+        $toolchainPackages = @($codexPackage)
+        if ($gitPackage) {
+            $toolchainPackages += $gitPackage
+        }
+        if ($useLlvmToolchain -and $llvmPackage) {
             $toolchainPackages += $llvmPackage
         }
 

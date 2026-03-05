@@ -94,11 +94,13 @@ That wipes the workspace, model volume, Toolchain cache, and Codex auth/config.
 
 ## Toolchain packages
 
-The image build now pre-seeds the Toolchain package repo inside the image. The default package refs are:
+The image build now pre-seeds the Toolchain package repo inside the image with:
 
-- `codex-linux:latest`
-- `git-linux:latest`
-- `llvm-linux:latest`
+- `codex:codex-0.106.0-linux`
+
+The Codex Linux image is currently published on Docker Hub as the legacy tag `codex-0.106.0-linux`, so the Toolchain package ref must use the raw-tag form `codex:codex-0.106.0-linux`.
+
+`git` and `clang` are installed directly from Ubuntu packages in the container because the current `allsagetech/toolchains` registry no longer publishes Linux `git` or `llvm` package names. `LOCAL_CODEX_TOOLCHAIN_GIT_PKG` and `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG` therefore default to empty in Docker unless you override them with valid package refs.
 
 You can override them at build and runtime with:
 
