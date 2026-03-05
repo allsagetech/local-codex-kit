@@ -1,4 +1,4 @@
-.git
 Toolchain
+.toolchain-offline
 *.tmp
 *.log

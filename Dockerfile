@@ -37,6 +37,9 @@ FROM base AS toolchain-seed
 
 ARG TOOLCHAIN_REPO_URL=https://github.com/allsagetech/Toolchain.git
 ARG TOOLCHAIN_REPO_REF=main
+ARG LOCAL_CODEX_TOOLCHAIN_CODEX_PKG=codex-linux:latest
+ARG LOCAL_CODEX_TOOLCHAIN_GIT_PKG=git-linux:latest
+ARG LOCAL_CODEX_TOOLCHAIN_LLVM_PKG=llvm-linux:latest
 
 RUN git clone --depth 1 --branch "${TOOLCHAIN_REPO_REF}" "${TOOLCHAIN_REPO_URL}" /tmp/Toolchain \
     && pwsh -NoLogo -NoProfile -Command "\
@@ -53,6 +56,16 @@ RUN git clone --depth 1 --branch "${TOOLCHAIN_REPO_REF}" "${TOOLCHAIN_REPO_URL}"
     " \
     && rm -rf /tmp/Toolchain
 
+RUN pwsh -NoLogo -NoProfile -Command "\
+        \$ErrorActionPreference = 'Stop'; \
+        \$env:PSModulePath = '/opt/powershell-modules:' + \$env:PSModulePath; \
+        Import-Module Toolchain -Force; \
+        New-Item -ItemType Directory -Path /opt/toolchain-repo -Force | Out-Null; \
+        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_CODEX_PKG}' /opt/toolchain-repo | Out-Host; \
+        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_GIT_PKG}' /opt/toolchain-repo | Out-Host; \
+        toolchain save -Index '${LOCAL_CODEX_TOOLCHAIN_LLVM_PKG}' /opt/toolchain-repo | Out-Host \
+    "
+
 FROM base AS final
 
 ARG LOCAL_CODEX_EMBEDDED_MODEL_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf
@@ -67,6 +80,7 @@ ENV LOCAL_CODEX_EMBEDDED_MODEL_PATH=/opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FIL
 COPY . .
 
 COPY --from=toolchain-seed /opt/powershell-modules /opt/powershell-modules
+COPY --from=toolchain-seed /opt/toolchain-repo /opt/toolchain-repo
 COPY --from=llama-server-builder /opt/llama-server/llama-server /usr/local/bin/llama-server
 
 RUN mkdir -p /root/.config/powershell \
@@ -76,7 +90,6 @@ RUN mkdir -p /root/.config/powershell \
     && if [ -d /opt/local-codex-kit/.models ]; then cp -a /opt/local-codex-kit/.models/. /opt/models/; fi \
     && if [ -n "${LOCAL_CODEX_EMBEDDED_MODEL_URL}" ]; then curl -fL --retry 5 --retry-delay 2 "${LOCAL_CODEX_EMBEDDED_MODEL_URL}" -o "/opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FILE}"; fi \
     && if [ -n "${LOCAL_CODEX_EMBEDDED_MODEL_SHA256}" ]; then echo "${LOCAL_CODEX_EMBEDDED_MODEL_SHA256}  /opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FILE}" | sha256sum -c -; fi \
-    && if [ -d /opt/local-codex-kit/.toolchain-offline ]; then cp -a /opt/local-codex-kit/.toolchain-offline/. /opt/toolchain-repo/; fi \
     && pwsh -NoLogo -NoProfile -Command "\
         \$ErrorActionPreference = 'Stop'; \
         \$env:PSModulePath = '/opt/powershell-modules:' + \$env:PSModulePath; \

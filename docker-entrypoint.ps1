@@ -17,6 +17,7 @@ function Get-FirstEmbeddedModelPath {
 
 $toolchainModulePath = if ($env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH) { $env:LOCAL_CODEX_TOOLCHAIN_MODULE_PATH } else { '/opt/powershell-modules' }
 
+$env:LOCAL_CODEX_KIT_ROOT = if ($env:LOCAL_CODEX_KIT_ROOT) { $env:LOCAL_CODEX_KIT_ROOT } else { '/opt/local-codex-kit' }
 $env:ToolchainPullPolicy = if ($env:ToolchainPullPolicy) { $env:ToolchainPullPolicy } else { 'IfNotPresent' }
 $env:ToolchainPath = if ($env:ToolchainPath) { $env:ToolchainPath } else { '/opt/toolchain-cache' }
 $env:ToolchainRepo = if ($env:ToolchainRepo) { $env:ToolchainRepo } else { '/opt/toolchain-repo' }
@@ -70,10 +71,12 @@ if (Get-Module -ListAvailable Toolchain) {
 
 $workspace = if ($env:LOCAL_CODEX_WORKSPACE) {
     $env:LOCAL_CODEX_WORKSPACE
+} elseif (Test-Path $env:LOCAL_CODEX_KIT_ROOT) {
+    $env:LOCAL_CODEX_KIT_ROOT
 } elseif (Test-Path '/workspace') {
     '/workspace'
 } else {
-    '/opt/local-codex-kit'
+    $env:LOCAL_CODEX_KIT_ROOT
 }
 
 if (Test-Path $workspace) {
@@ -82,7 +85,7 @@ if (Test-Path $workspace) {
 
 $embeddedServerInfo = $null
 if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
-    $starterScript = '/opt/local-codex-kit/start-embedded-llm.ps1'
+    $starterScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'start-embedded-llm.ps1'
     if (-not (Test-Path -LiteralPath $starterScript)) {
         throw "Embedded model starter script not found: $starterScript"
     }
@@ -98,7 +101,7 @@ if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
 
 Write-Host ''
 Write-Host 'Local Codex Kit container'
-Write-Host ("- Repo: {0}" -f '/opt/local-codex-kit')
+Write-Host ("- Repo: {0}" -f $env:LOCAL_CODEX_KIT_ROOT)
 Write-Host ("- Working directory: {0}" -f (Get-Location).Path)
 Write-Host ("- Codex CLI: {0}" -f ((Get-Command codex).Source))
 Write-Host ("- Network mode: {0}" -f 'offline (set by docker compose)')
@@ -117,7 +120,7 @@ if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
         Write-Host ("- Embedded model server PID: {0}" -f $embeddedServerInfo.processId)
     }
 }
-Write-Host '- Use this container for the kit scripts and Codex CLI environment.'
+Write-Host '- Runtime state stays in Docker-managed volumes for the repo, models, Toolchain cache, and Codex config.'
 Write-Host ''
 
 if ($Command -and $Command.Count -gt 0) {
@@ -128,6 +131,6 @@ if ($Command -and $Command.Count -gt 0) {
 }
 
 Write-Host 'Starting interactive PowerShell session...'
-Write-Host '- Container defaults: `codex` uses LLVM/vLLM preset with Toolchain, `codex-local` uses LM Studio preset.'
+Write-Host '- Container defaults: `codex`, `codex-llvm`, and `codex-vllm` use the embedded/OpenAI-compatible endpoint.'
 pwsh -NoLogo
 exit $LASTEXITCODE

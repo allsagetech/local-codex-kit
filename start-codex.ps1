@@ -63,6 +63,10 @@ function Test-OpenAiEndpointReachable {
 
 $spec = Get-CodexLaunchSpec -ScriptRoot $PSScriptRoot -Mode $Mode -ExtraPrompt $ExtraPrompt -NoPreamble:$NoPreamble -WorkingDirectory $WorkingDirectory -UseToolchain:$UseToolchain -SkipRepoCheck:$SkipRepoCheck
 
+if (($env:LOCAL_CODEX_CONTAINER_MODE -eq '1') -and ($spec.resolvedMode -in @('local-balanced', 'local-coder', 'local-small'))) {
+    throw 'LM Studio presets are not included in the Docker image. Use codex, codex-llvm, or codex-vllm.'
+}
+
 Write-Host ''
 Write-Host 'Codex launcher:'
 Write-Host ("- Mode: {0}" -f $spec.resolvedMode)
@@ -95,6 +99,10 @@ if ($UseToolchain) {
 Write-Host ''
 
 if ($spec.provider -eq 'llvm' -and -not (Test-OpenAiEndpointReachable -BaseUrl $spec.localBaseUrl)) {
+    if ($env:LOCAL_CODEX_CONTAINER_MODE -eq '1') {
+        throw ("LLVM endpoint is not reachable at {0}. Build the image with a GGUF model, place one under /opt/models inside Docker, or point LOCAL_CODEX_LLVM_BASE_URL at another in-container OpenAI-compatible endpoint." -f $spec.localBaseUrl)
+    }
+
     throw ("LLVM endpoint is not reachable at {0}. Start your local LLVM/vLLM-compatible server, set LOCAL_CODEX_LLVM_BASE_URL, or run codex with -Preset local." -f $spec.localBaseUrl)
 }
 
