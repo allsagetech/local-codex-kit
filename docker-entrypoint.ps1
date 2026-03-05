@@ -79,9 +79,11 @@ $workspace = if ($env:LOCAL_CODEX_WORKSPACE) {
     $env:LOCAL_CODEX_KIT_ROOT
 }
 
-if (Test-Path $workspace) {
-    Set-Location $workspace
+if (-not (Test-Path $workspace)) {
+    New-Item -ItemType Directory -Path $workspace -Force | Out-Null
 }
+
+Set-Location $workspace
 
 $embeddedServerInfo = $null
 if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
@@ -120,7 +122,8 @@ if ($env:LOCAL_CODEX_EMBEDDED_MODEL_ENABLE -ne '0') {
         Write-Host ("- Embedded model server PID: {0}" -f $embeddedServerInfo.processId)
     }
 }
-Write-Host '- Runtime state stays in Docker-managed volumes for the repo, models, Toolchain cache, and Codex config.'
+Write-Host '- Runtime state stays in Docker-managed volumes for the workspace, models, Toolchain cache, and Codex config.'
+Write-Host '- Put your project under /workspace before running codex for repo-aware behavior.'
 Write-Host ''
 
 if ($Command -and $Command.Count -gt 0) {

@@ -18,9 +18,11 @@ docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
 
-3. Inside the container:
+3. Inside the container, move into a project under `/workspace` and then run Codex:
 
 ```powershell
+New-Item -ItemType Directory -Force /workspace/scratch | Out-Null
+Set-Location /workspace/scratch
 codex
 codex-llvm
 codex-vllm
@@ -29,28 +31,66 @@ codex-vllm
 `codex` defaults to the embedded LLVM/vLLM-compatible endpoint at `http://127.0.0.1:8000/v1`.
 `docker compose` is configured with `network_mode: "none"` at runtime, so the container has no external network access after startup.
 If you build without a model, the shell still starts, but `codex` will not work until `/opt/models` contains a GGUF model or `LOCAL_CODEX_LLVM_BASE_URL` points at another in-container endpoint.
+For repo-aware sessions, put a Git repo or project directory under `/workspace` before launching `codex`.
+
+## Importing code into the workspace
+
+Use the Docker-managed workspace volume at `/workspace` for the code you want Codex to edit.
+
+One concrete import flow from the host without bind mounts is:
+
+1. Start a named session:
+
+```powershell
+docker compose run --name local-codex-kit-session local-codex-kit
+```
+
+2. From a second host shell, copy a project into the container workspace:
+
+```powershell
+docker cp C:\path\to\repo\. local-codex-kit-session:/workspace/my-repo
+```
+
+3. Back in the container shell:
+
+```powershell
+Set-Location /workspace/my-repo
+codex
+```
+
+When that session exits, the project remains in the Docker-managed `workspace` volume for the next container run.
 
 ## What persists
 
 The default Compose service stores all mutable runtime state in named Docker volumes:
 
-- repo contents at `/opt/local-codex-kit`
+- workspace contents at `/workspace`
 - model files at `/opt/models`
 - Toolchain cache at `/opt/toolchain-cache`
-- PowerShell and app config at `/root/.config`
 - Codex auth/config at `/root/.codex`
 
-That means the container can be removed and recreated without writing launcher state onto the host filesystem outside Docker's own managed storage.
+The launcher code itself stays in the image at `/opt/local-codex-kit`, so rebuilding the image updates the kit without requiring a volume reset.
 
-## Updating and resetting
+## Updating the image
 
-The repo volume is seeded from the image the first time it is created. If you rebuild the image and want a fresh copy of the repo inside Docker, remove the named volumes and start again:
+To pick up new kit code or a new image build, rebuild and start the container again:
 
 ```powershell
-docker compose down -v
 docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
+
+This keeps the Docker-managed workspace, models, Toolchain cache, and Codex auth state intact.
+
+## Resetting state
+
+If you want a completely fresh container state, remove the service volumes:
+
+```powershell
+docker compose down -v
+```
+
+That wipes the workspace, model volume, Toolchain cache, and Codex auth/config.
 
 ## Toolchain packages
 
@@ -66,7 +106,7 @@ You can override them at build and runtime with:
 - `LOCAL_CODEX_TOOLCHAIN_GIT_PKG`
 - `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG`
 
-If you change those refs, rebuild the image so the container's offline Toolchain repo matches the runtime package settings.
+If you change those refs, rebuild the image so the container's offline Toolchain repo matches the runtime package settings. The default runtime pull policy refreshes packages from the embedded offline repo on each launch.
 
 ## Container commands
 
@@ -97,7 +137,8 @@ codex-vllm
 
 - model weights are not included by default; provide them with `LOCAL_CODEX_EMBEDDED_MODEL_URL` during build or intentionally bake a local file into the image
 - `Codex sandbox: workspace-write` is the Codex CLI sandbox mode inside the container
-- if you want repo-aware behavior inside the container, keep `.git` in the image context when building
+- if you rebuild the image with a different baked model and want it to replace the existing `/opt/models` volume contents, reset the model volume with `docker compose down -v` or remove that volume explicitly
+- if you want repo-aware behavior for the launcher repo itself, keep `.git` in the image context when building
 
 ## License
 
