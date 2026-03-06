@@ -6,6 +6,7 @@ This repo now follows the Ollama Codex integration inside the container instead 
 - runs `ollama serve` inside the same container
 - defaults to `gpt-oss:20b`
 - keeps runtime networking disabled with `network_mode: "none"`
+- includes VS Code, Chromium-compatible browser tooling, Git, Go, Python, Helm, Zarf, Node 22, and Linux build tools
 
 The primary workflow is `codex --oss` inside Docker. A convenience wrapper, `codex-local`, is also available and expands to the container-safe defaults for this repo.
 
@@ -42,17 +43,36 @@ codex-local
 Equivalent manual command inside the container:
 
 ```powershell
-codex --oss -m gpt-oss:20b
+codex --oss -m openai/gpt-oss-20b
 ```
 
-`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled model and the default Codex target unless you override it.
+`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled Ollama tag, and `openai/gpt-oss-20b` is the default Codex model name. That follows the Ollama Codex docs and avoids Codex's fallback metadata warning for `gpt-oss:20b`.
 
 ## Default behavior
 
-- `codex-local`: runs `codex --oss` with Docker-safe defaults and `gpt-oss:20b`
+- `codex-local`: runs `codex --oss` with Docker-safe defaults and `openai/gpt-oss-20b`
 - `codex --oss`: the upstream Ollama manual flow; the container seeds the OSS base URL and Codex config for you
 - `ollama-local`: runs the default Ollama model directly
 - `ollama list`: shows installed models
+
+## Tooling
+
+Installed in the image:
+
+- `code`
+- `chromium`
+- `git`
+- `go`
+- `python`, `pip`, `venv`
+- `helm`
+- `zarf`
+- `node`, `npm`, `npx`
+- `gcc`, `clang`
+
+Linux-specific note:
+
+- `Notepad++` and `VS Build Tools` are Windows-only and are not added to this Ubuntu container.
+- The image installs Linux-native equivalents instead: VS Code, terminal editors, and GNU/Clang build tooling.
 
 ## Context length
 
@@ -119,6 +139,8 @@ $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
 docker compose run --rm local-codex-kit
 ```
 
+If you ever need to force a Codex model name manually, set `LOCAL_CODEX_CODEX_MODEL` explicitly.
+
 The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is about 14 GB.
 
 ## State and rebuilds
@@ -144,6 +166,12 @@ Useful checks inside the container:
 
 ```powershell
 codex --version
+code --version
+chromium --version
+go version
+python --version
+helm version --short
+zarf version
 ollama list
 Get-ChildItem /tmp/local-codex-kit
 Get-Content /tmp/local-codex-kit/ollama.err.log -Tail 100
@@ -158,9 +186,9 @@ The repo name, Compose service name, and environment variables still use the `lo
 
 ## Files
 
-- `Dockerfile`: builds the image, installs PowerShell, Node 22, Codex CLI, and Ollama, then pre-pulls configured models
+- `Dockerfile`: builds the image, installs PowerShell, Node 22, Codex CLI, Ollama, and the extra Linux-native dev tooling, then pre-pulls configured models
 - `docker-compose.yml`: defines the offline container runtime and Docker-managed volumes
-- `docker-entrypoint.ps1`: starts Ollama, seeds the Codex OSS config, loads the shell helpers, and opens the container shell
+- `docker-entrypoint.ps1`: starts Ollama, seeds the Codex OSS config with the Ollama-compatible model name, loads the shell helpers, and opens the container shell
 - `docker-profile.ps1`: adds the `codex-local`, `codex-ollama`, and `ollama-local` convenience commands
 - `pull-ollama-models.ps1`: pulls the configured Ollama models during image build
 - `start-ollama.ps1`: launches `ollama serve` with the configured context length and waits for readiness

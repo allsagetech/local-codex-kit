@@ -41,6 +41,27 @@ function Convert-ToOllamaModelName {
     return $resolvedModel
 }
 
+function Convert-ToCodexModelName {
+    param(
+        [string]$ModelName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ModelName)) {
+        return ''
+    }
+
+    $resolvedModel = $ModelName.Trim()
+    if ($resolvedModel -match '^gpt-oss:(.+)$') {
+        return "openai/gpt-oss-$($Matches[1])"
+    }
+
+    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
+        return "openai/gpt-oss-$($Matches[1])"
+    }
+
+    return $resolvedModel
+}
+
 function Convert-ToTomlString {
     param(
         [string]$Value
@@ -58,6 +79,7 @@ function Initialize-CodexConfig {
     param(
         [string]$CodexHome,
         [string]$OssBaseUrl,
+        [string]$DefaultModel,
         [string]$ApprovalPolicy,
         [string]$SandboxMode
     )
@@ -70,6 +92,7 @@ function Initialize-CodexConfig {
     $managedHeader = '# Managed by local-codex-kit. Remove this line to stop auto-refresh.'
     $configContent = @(
         $managedHeader
+        'model = ' + (Convert-ToTomlString -Value $DefaultModel)
         'approval_policy = ' + (Convert-ToTomlString -Value $ApprovalPolicy)
         'sandbox_mode = ' + (Convert-ToTomlString -Value $SandboxMode)
         ''
@@ -99,6 +122,7 @@ $env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH = if ($env:LOCAL_CODEX_OLLAMA_CONTEXT_LEN
 $env:CODEX_HOME = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { '/root/.codex' }
 $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY = if ($env:LOCAL_CODEX_CODEX_APPROVAL_POLICY) { $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY } else { 'on-request' }
 $env:LOCAL_CODEX_CODEX_SANDBOX_MODE = if ($env:LOCAL_CODEX_CODEX_SANDBOX_MODE) { $env:LOCAL_CODEX_CODEX_SANDBOX_MODE } else { 'danger-full-access' }
+$env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) { $env:LOCAL_CODEX_CODEX_MODEL } else { '' }
 
 $defaultOllamaModel = Get-FirstConfiguredOllamaModel -RawModels $env:LOCAL_CODEX_OLLAMA_PULL_MODELS
 $requestedModel = if ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
@@ -115,12 +139,14 @@ $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS = if ($requestedModel) {
 } else {
     ''
 }
-$env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
-    $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
+$env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) {
+    Convert-ToCodexModelName -ModelName $env:LOCAL_CODEX_CODEX_MODEL
+} elseif ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
+    Convert-ToCodexModelName -ModelName $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
 } elseif ($defaultOllamaModel) {
-    Convert-ToOllamaModelName -ModelName $defaultOllamaModel
+    Convert-ToCodexModelName -ModelName $defaultOllamaModel
 } else {
-    'gpt-oss:20b'
+    'openai/gpt-oss-20b'
 }
 
 $workspace = $env:LOCAL_CODEX_WORKSPACE
@@ -164,6 +190,7 @@ $env:CODEX_OSS_BASE_URL = $env:LOCAL_CODEX_OLLAMA_BASE_URL.TrimEnd('/') + '/v1'
 Initialize-CodexConfig `
     -CodexHome $env:CODEX_HOME `
     -OssBaseUrl $env:CODEX_OSS_BASE_URL `
+    -DefaultModel $env:LOCAL_CODEX_CODEX_MODEL `
     -ApprovalPolicy $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY `
     -SandboxMode $env:LOCAL_CODEX_CODEX_SANDBOX_MODE
 
@@ -198,6 +225,8 @@ Write-Host ("- Codex OSS endpoint: {0}" -f $env:CODEX_OSS_BASE_URL)
 Write-Host ("- Codex default model: {0}" -f $env:LOCAL_CODEX_CODEX_MODEL)
 Write-Host ("- Codex sandbox: {0}" -f $env:LOCAL_CODEX_CODEX_SANDBOX_MODE)
 Write-Host ("- Codex approvals: {0}" -f $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY)
+Write-Host '- Linux-native tools: code, chromium, git, go, python, helm, zarf, node, gcc/clang.'
+Write-Host '- Windows-only tools such as Notepad++ and VS Build Tools are not available in this Ubuntu image.'
 Write-Host '- Runtime state stays in Docker-managed volumes for the workspace and Ollama state.'
 Write-Host '- Put your project under /workspace before running codex-local or codex --oss.'
 Write-Host ''
