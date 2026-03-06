@@ -47,8 +47,6 @@ $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='qwen2.5-coder:32b'
 docker compose run --rm local-codex-kit
 ```
 
-If you prefer importing a local GGUF instead of pulling from Ollama, the image still supports `LOCAL_CODEX_EMBEDDED_MODEL_URL`, `LOCAL_CODEX_EMBEDDED_MODEL_FILE`, and `LOCAL_CODEX_EMBEDDED_MODEL_SHA256`.
-
 ## Workspace flow
 
 Use the Docker-managed `/workspace` volume for the code you want to work on. One straightforward host-to-container import flow is:
@@ -79,7 +77,6 @@ The workspace persists across container runs because it lives in a named Docker 
 The default Compose service keeps runtime state in Docker volumes:
 
 - `/workspace`
-- `/opt/models`
 - `/root/.ollama`
 
 Rebuilding the image updates the launcher code at `/opt/local-codex-kit` without clearing those volumes:
@@ -95,7 +92,7 @@ For a full reset:
 docker compose down -v
 ```
 
-That removes the workspace, model cache, and Ollama state.
+That removes the workspace and Ollama state.
 
 ## Files that matter
 
@@ -104,7 +101,7 @@ That removes the workspace, model cache, and Ollama state.
 - `docker-entrypoint.ps1`: starts Ollama and opens the container shell
 - `docker-profile.ps1`: adds the `ollama-local` convenience command
 - `pull-ollama-models.ps1`: pulls the configured Ollama models during image build
-- `start-embedded-ollama.ps1`: launches `ollama serve`, optionally imports a local GGUF, and waits for readiness
+- `start-ollama.ps1`: launches `ollama serve` and waits for readiness
 
 ## License
 

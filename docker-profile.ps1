@@ -16,10 +16,6 @@ function Get-DefaultOllamaModel {
     } catch {
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_EMBEDDED_MODEL_ALIAS)) {
-        return $env:LOCAL_CODEX_EMBEDDED_MODEL_ALIAS
-    }
-
     return 'qwen3-coder'
 }
 

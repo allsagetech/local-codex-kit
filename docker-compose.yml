@@ -3,9 +3,6 @@ services:
     build:
       context: .
       args:
-        LOCAL_CODEX_EMBEDDED_MODEL_FILE: ${LOCAL_CODEX_EMBEDDED_MODEL_FILE:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
-        LOCAL_CODEX_EMBEDDED_MODEL_URL: ${LOCAL_CODEX_EMBEDDED_MODEL_URL:-}
-        LOCAL_CODEX_EMBEDDED_MODEL_SHA256: ${LOCAL_CODEX_EMBEDDED_MODEL_SHA256:-}
         LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder,qwen2.5-coder:32b}
     image: allsagetech/local-codex-kit:latest
     network_mode: "none"
@@ -17,21 +14,15 @@ services:
     environment:
       LOCAL_CODEX_WORKSPACE: /workspace
       LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder,qwen2.5-coder:32b}
-      LOCAL_CODEX_EMBEDDED_MODEL_PATH: ${LOCAL_CODEX_EMBEDDED_MODEL_PATH:-/opt/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf}
-      LOCAL_CODEX_EMBEDDED_MODEL_ALIAS: ${LOCAL_CODEX_EMBEDDED_MODEL_ALIAS:-qwen2.5-coder-7b-instruct}
-      LOCAL_CODEX_EMBEDDED_CONTEXT: ${LOCAL_CODEX_EMBEDDED_CONTEXT:-8192}
       LOCAL_CODEX_OLLAMA_ENABLE: ${LOCAL_CODEX_OLLAMA_ENABLE:-1}
       LOCAL_CODEX_OLLAMA_PORT: ${LOCAL_CODEX_OLLAMA_PORT:-11434}
       LOCAL_CODEX_OLLAMA_MODEL_ALIAS: ${LOCAL_CODEX_OLLAMA_MODEL_ALIAS:-}
-      LOCAL_CODEX_OLLAMA_CONTEXT: ${LOCAL_CODEX_OLLAMA_CONTEXT:-8192}
       LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC:-300}
       LOCAL_CODEX_OLLAMA_REQUIRE_READY: ${LOCAL_CODEX_OLLAMA_REQUIRE_READY:-0}
     volumes:
       - local-codex-kit-workspace:/workspace
-      - local-codex-kit-models:/opt/models
       - local-codex-kit-ollama:/root/.ollama
 
 volumes:
   local-codex-kit-workspace:
-  local-codex-kit-models:
   local-codex-kit-ollama:

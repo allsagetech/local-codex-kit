@@ -1,8 +1,5 @@
 FROM ubuntu:22.04
 
-ARG LOCAL_CODEX_EMBEDDED_MODEL_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf
-ARG LOCAL_CODEX_EMBEDDED_MODEL_URL=
-ARG LOCAL_CODEX_EMBEDDED_MODEL_SHA256=
 ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=qwen3-coder,qwen2.5-coder:32b
 ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
 
@@ -21,17 +18,12 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-ENV LOCAL_CODEX_EMBEDDED_MODEL_PATH=/opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FILE}
 ENV LOCAL_CODEX_OLLAMA_PULL_MODELS=${LOCAL_CODEX_OLLAMA_PULL_MODELS}
 
 COPY . .
 
 RUN mkdir -p /root/.config/powershell \
-    && mkdir -p /opt/models \
     && cp /opt/local-codex-kit/docker-profile.ps1 /root/.config/powershell/Microsoft.PowerShell_profile.ps1 \
-    && if [ -d /opt/local-codex-kit/.models ]; then cp -a /opt/local-codex-kit/.models/. /opt/models/; fi \
-    && if [ -n "${LOCAL_CODEX_EMBEDDED_MODEL_URL}" ]; then curl -fL --retry 5 --retry-delay 2 "${LOCAL_CODEX_EMBEDDED_MODEL_URL}" -o "/opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FILE}"; fi \
-    && if [ -n "${LOCAL_CODEX_EMBEDDED_MODEL_SHA256}" ]; then echo "${LOCAL_CODEX_EMBEDDED_MODEL_SHA256}  /opt/models/${LOCAL_CODEX_EMBEDDED_MODEL_FILE}" | sha256sum -c -; fi \
     && pwsh -NoLogo -NoProfile -File ./pull-ollama-models.ps1 -Models "${LOCAL_CODEX_OLLAMA_PULL_MODELS}"
 
 ENTRYPOINT ["pwsh", "-NoLogo", "-NoProfile", "-File", "/opt/local-codex-kit/docker-entrypoint.ps1"]
