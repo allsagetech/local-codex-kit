@@ -1,16 +1,18 @@
-# Local Codex Kit
+# Local Codex Kit (Ollama-only)
 
-This repo now defaults to a container-only workflow. Runtime state stays inside Docker-managed volumes instead of writing to your host profile, host Toolchain install, host LM Studio install, or host bind-mounted workspace.
+This repo now provides a container-only local Ollama workflow. Codex, LLVM, `llama-server`, and Toolchain are no longer part of the runtime path.
 
 ## Quick start
 
-1. Build the image. If you want an embedded model baked into the image, set a model URL first:
+1. Build the image. By default the build pre-pulls `qwen3-coder` through Ollama. To choose different models, set `LOCAL_CODEX_OLLAMA_PULL_MODELS` first:
 
 ```powershell
-$env:LOCAL_CODEX_EMBEDDED_MODEL_URL='https://.../qwen2.5-coder-7b-instruct-q4_k_m.gguf'
-$env:LOCAL_CODEX_EMBEDDED_MODEL_SHA256='<sha256>'
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='qwen3-coder'
 docker compose build local-codex-kit
 ```
+
+You can pre-pull multiple Ollama models with a comma-separated list such as `qwen3-coder,deepseek-r1:8b`.
+Set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` if you want the image build to skip model downloads entirely.
 
 2. Start a shell inside the container:
 
@@ -18,27 +20,30 @@ docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
 
-3. Inside the container, move into a project under `/workspace` and then run Codex:
+3. Inside the container, move into a project under `/workspace` and use Ollama directly:
 
 ```powershell
 New-Item -ItemType Directory -Force /workspace/scratch | Out-Null
 Set-Location /workspace/scratch
-codex
-codex-llvm
-codex-vllm
+ollama list
+ollama-local
+# or:
+ollama run qwen3-coder
 ```
 
-`codex` defaults to the embedded LLVM/vLLM-compatible endpoint at `http://127.0.0.1:8000/v1`.
-`docker compose` is configured with `network_mode: "none"` at runtime, so the container has no external network access after startup.
-If you build without a model, the shell still starts, but `codex` will not work until `/opt/models` contains a GGUF model or `LOCAL_CODEX_LLVM_BASE_URL` points at another in-container endpoint.
-If embedded `llama-server` startup fails, the container now drops you into the shell with the recent server logs instead of exiting immediately. Increase `LOCAL_CODEX_EMBEDDED_STARTUP_TIMEOUT_SEC` if your model is slow to load on CPU, or set `LOCAL_CODEX_EMBEDDED_REQUIRE_READY=1` to keep fail-fast behavior.
-For repo-aware sessions, put a Git repo or project directory under `/workspace` before launching `codex`.
+The container starts `ollama serve` automatically.
+During image build, it pre-pulls the models listed in `LOCAL_CODEX_OLLAMA_PULL_MODELS`.
+`ollama-local` is a convenience wrapper for the default model selected by `LOCAL_CODEX_OLLAMA_MODEL_ALIAS`, or the first pulled model if that variable is unset.
+`docker compose` runs with `network_mode: "none"`, so the container has no external network access after startup.
+If you build without pre-pulling a model, the shell still starts, but `ollama-local` will not work until you pull or create a model yourself.
+If embedded Ollama startup fails, the container drops you into the shell with the recent server logs instead of exiting immediately. Increase `LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC` if startup is slow, or set `LOCAL_CODEX_OLLAMA_REQUIRE_READY=1` to keep fail-fast behavior.
+If you prefer a local GGUF import instead of `ollama pull`, the old baked-model env vars still work: `LOCAL_CODEX_EMBEDDED_MODEL_URL`, `LOCAL_CODEX_EMBEDDED_MODEL_FILE`, and `LOCAL_CODEX_EMBEDDED_MODEL_SHA256`.
 
 ## Importing code into the workspace
 
-Use the Docker-managed workspace volume at `/workspace` for the code you want Codex to edit.
+Use the Docker-managed workspace volume at `/workspace` for the code you want to work on.
 
-One concrete import flow from the host without bind mounts is:
+One concrete flow from the host without bind mounts is:
 
 1. Start a named session:
 
@@ -56,21 +61,20 @@ docker cp C:\path\to\repo\. local-codex-kit-session:/workspace/my-repo
 
 ```powershell
 Set-Location /workspace/my-repo
-codex
+ollama-local
 ```
 
 When that session exits, the project remains in the Docker-managed `workspace` volume for the next container run.
 
 ## What persists
 
-The default Compose service stores all mutable runtime state in named Docker volumes:
+The default Compose service stores mutable runtime state in named Docker volumes:
 
 - workspace contents at `/workspace`
 - model files at `/opt/models`
-- Toolchain cache at `/opt/toolchain-cache`
-- Codex auth/config at `/root/.codex`
+- Ollama state at `/root/.ollama`
 
-The launcher code itself stays in the image at `/opt/local-codex-kit`, so rebuilding the image updates the kit without requiring a volume reset.
+The launcher code stays in the image at `/opt/local-codex-kit`, so rebuilding the image updates the kit without requiring a volume reset.
 
 ## Updating the image
 
@@ -81,7 +85,7 @@ docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
 
-This keeps the Docker-managed workspace, models, Toolchain cache, and Codex auth state intact.
+This keeps the Docker-managed workspace, models, and Ollama state intact.
 
 ## Resetting state
 
@@ -91,57 +95,35 @@ If you want a completely fresh container state, remove the service volumes:
 docker compose down -v
 ```
 
-That wipes the workspace, model volume, Toolchain cache, and Codex auth/config.
-
-## Toolchain packages
-
-The image build now pre-seeds the Toolchain package repo inside the image with:
-
-- `codex:codex-0.106.0-linux`
-
-The Codex Linux image is currently published on Docker Hub as the legacy tag `codex-0.106.0-linux`, so the Toolchain package ref must use the raw-tag form `codex:codex-0.106.0-linux`.
-
-`git` and `clang` are installed directly from Ubuntu packages in the container because the current `allsagetech/toolchains` registry no longer publishes Linux `git` or `llvm` package names. `LOCAL_CODEX_TOOLCHAIN_GIT_PKG` and `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG` therefore default to empty in Docker unless you override them with valid package refs.
-
-You can override them at build and runtime with:
-
-- `LOCAL_CODEX_TOOLCHAIN_CODEX_PKG`
-- `LOCAL_CODEX_TOOLCHAIN_GIT_PKG`
-- `LOCAL_CODEX_TOOLCHAIN_LLVM_PKG`
-
-If you change those refs, rebuild the image so the container's offline Toolchain repo matches the runtime package settings. The default runtime pull policy refreshes packages from the embedded offline repo on each launch.
+That wipes the workspace, model volume, and Ollama state.
 
 ## Container commands
 
 Inside the container shell:
 
 ```powershell
-codex
-codex-llvm
-codex-vllm
+ollama-local
+ollama list
+ollama run qwen3-coder
 ```
-
-`codex-local`, `codex-qwen`, and `codex-small` are intentionally disabled in the container image because they depend on LM Studio, which is not installed in this Docker-first flow.
-
-## Legacy host scripts
-
-`install.ps1`, `delete.ps1`, and `seed-toolchain-offline.ps1` are still in the repo for older host-based workflows, but they are no longer the default or recommended path.
 
 ## Files that matter
 
-- `Dockerfile`: builds the container image, installs PowerShell/Codex, builds Toolchain, and seeds the offline Toolchain repo during image build
+- `Dockerfile`: builds the container image and installs PowerShell plus Ollama
 - `docker-compose.yml`: runs the container without external network access and keeps mutable state in Docker volumes
-- `docker-entrypoint.ps1`: starts the embedded model server when available and opens the container shell
-- `docker-profile.ps1`: maps supported container commands to the LLVM/vLLM preset
-- `start-embedded-llm.ps1`: launches `llama-server` inside the container and waits for readiness
-- `start-codex.ps1`: launches Codex and blocks LM Studio-only presets when running in container mode
+- `docker-entrypoint.ps1`: starts Ollama when available and opens the container shell
+- `docker-profile.ps1`: adds the `ollama-local` convenience command
+- `pull-ollama-models.ps1`: starts a temporary Ollama server during image build and runs `ollama pull` for configured models
+- `start-embedded-ollama.ps1`: launches `ollama serve`, optionally imports a local GGUF as an Ollama model, and waits for readiness
 
 ## Notes
 
-- model weights are not included by default; provide them with `LOCAL_CODEX_EMBEDDED_MODEL_URL` during build or intentionally bake a local file into the image
-- `Codex sandbox: workspace-write` is the Codex CLI sandbox mode inside the container
-- if you rebuild the image with a different baked model and want it to replace the existing `/opt/models` volume contents, reset the model volume with `docker compose down -v` or remove that volume explicitly
-- if you want repo-aware behavior for the launcher repo itself, keep `.git` in the image context when building
+- build-time model pulls are controlled by `LOCAL_CODEX_OLLAMA_PULL_MODELS`
+- set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` to skip build-time pulls
+- if you pull multiple models, set `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` to choose which one `ollama-local` should run by default
+- you can still bake a local GGUF into the image with `LOCAL_CODEX_EMBEDDED_MODEL_URL` if you want an imported local model instead of a registry pull
+- Ollama is enabled by default in Docker; set `LOCAL_CODEX_OLLAMA_ENABLE=0` if you want to start the shell without a local runtime
+- if you rebuild the image with different pulled models and want a completely fresh Ollama state, reset the volumes with `docker compose down -v`
 
 ## License
 

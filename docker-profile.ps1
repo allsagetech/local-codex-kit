@@ -1,40 +1,30 @@
-function Get-LocalCodexKitRoot {
-    if ($env:LOCAL_CODEX_KIT_ROOT) {
-        return $env:LOCAL_CODEX_KIT_ROOT
+function Get-DefaultOllamaModel {
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS)) {
+        return $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
     }
 
-    return '/opt/local-codex-kit'
+    try {
+        $lines = @(& ollama list 2>$null)
+        foreach ($line in @($lines | Select-Object -Skip 1)) {
+            $trimmed = $line.Trim()
+            if ([string]::IsNullOrWhiteSpace($trimmed)) {
+                continue
+            }
+
+            return (($trimmed -split '\s+')[0]).Trim()
+        }
+    } catch {
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_EMBEDDED_MODEL_ALIAS)) {
+        return $env:LOCAL_CODEX_EMBEDDED_MODEL_ALIAS
+    }
+
+    return 'qwen3-coder'
 }
 
-function Show-UnsupportedContainerPreset {
-    param(
-        [string]$Name
-    )
+function ollama-local {
+    $model = Get-DefaultOllamaModel
 
-    throw ("{0} requires LM Studio, which is intentionally not installed in the container image. Use codex, codex-llvm, or codex-vllm." -f $Name)
-}
-
-function codex {
-    # Default container route is LLVM/vLLM with Toolchain enabled.
-    & (Join-Path (Get-LocalCodexKitRoot) 'codex-here.ps1') -Preset llvm @args
-}
-
-function codex-llvm {
-    & (Join-Path (Get-LocalCodexKitRoot) 'codex-here.ps1') -Preset llvm @args
-}
-
-function codex-vllm {
-    & (Join-Path (Get-LocalCodexKitRoot) 'codex-here.ps1') -Preset vllm @args
-}
-
-function codex-local {
-    Show-UnsupportedContainerPreset -Name 'codex-local'
-}
-
-function codex-qwen {
-    Show-UnsupportedContainerPreset -Name 'codex-qwen'
-}
-
-function codex-small {
-    Show-UnsupportedContainerPreset -Name 'codex-small'
+    & ollama run $model @args
 }
