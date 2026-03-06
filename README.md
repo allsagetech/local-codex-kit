@@ -166,7 +166,7 @@ Useful checks inside the container:
 
 ```powershell
 codex --version
-code --version
+dpkg-query -W -f='${binary:Package} ${Version}\n' code
 chromium --version
 go version
 python --version

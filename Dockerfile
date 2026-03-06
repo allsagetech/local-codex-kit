@@ -33,7 +33,7 @@ RUN apt-get update \
     && curl -fsSL "https://github.com/zarf-dev/zarf/releases/download/${ZARF_VERSION}/zarf_${ZARF_VERSION_STRIPPED}_Linux_amd64" -o /usr/local/bin/zarf \
     && chmod +x /usr/local/bin/zarf \
     && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium \
-    && code --version \
+    && dpkg-query -W -f='${binary:Package} ${Version}\n' code \
     && google-chrome-stable --version \
     && chromium --version \
     && git --version \
