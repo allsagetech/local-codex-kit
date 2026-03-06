@@ -16,11 +16,17 @@ function Get-DefaultOllamaModel {
     } catch {
     }
 
-    return 'qwen3-coder'
+    return 'gpt-oss:20b'
 }
 
 function ollama-local {
     $model = Get-DefaultOllamaModel
 
     & ollama run $model @args
+}
+
+function codex-local {
+    $model = Get-DefaultOllamaModel
+
+    & codex --profile oss --model $model --dangerously-bypass-approvals-and-sandbox @args
 }

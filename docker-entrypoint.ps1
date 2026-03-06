@@ -67,6 +67,26 @@ if ($env:LOCAL_CODEX_OLLAMA_ENABLE -ne '0') {
     }
 }
 
+$ollamaHost = if ($env:LOCAL_CODEX_OLLAMA_HOST) { $env:LOCAL_CODEX_OLLAMA_HOST } else { '127.0.0.1' }
+$env:LOCAL_CODEX_OLLAMA_BASE_URL = if ($ollamaInfo) {
+    '{0}/v1' -f $ollamaInfo.ollamaBaseUrl.TrimEnd('/')
+} else {
+    "http://$ollamaHost`:$($env:LOCAL_CODEX_OLLAMA_PORT)/v1"
+}
+
+$codexConfigPath = $null
+$codexConfigError = $null
+$codexConfiguratorScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'configure-codex.ps1'
+if (Test-Path -LiteralPath $codexConfiguratorScript) {
+    try {
+        $codexConfigPath = & $codexConfiguratorScript -BaseUrl $env:LOCAL_CODEX_OLLAMA_BASE_URL -Model $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
+    } catch {
+        $codexConfigError = $_.Exception.Message
+        Write-Warning 'Codex config generation failed. Continuing with manual Codex setup.'
+        Write-Warning $codexConfigError
+    }
+}
+
 Write-Host ''
 Write-Host 'Local Ollama container'
 Write-Host ("- Repo: {0}" -f $env:LOCAL_CODEX_KIT_ROOT)
@@ -85,8 +105,14 @@ if ($ollamaInfo) {
 } elseif ($ollamaStartupError) {
     Write-Host '- Ollama startup: failed; shell fallback enabled'
 }
+if ($codexConfigPath) {
+    Write-Host ("- Codex config: {0}" -f $codexConfigPath)
+    Write-Host ("- Codex default profile: {0}" -f 'oss')
+} elseif ($codexConfigError) {
+    Write-Host '- Codex config: failed; manual setup required'
+}
 Write-Host '- Runtime state stays in Docker-managed volumes for the workspace and Ollama state.'
-Write-Host '- Put your project under /workspace before running ollama-local.'
+Write-Host '- Put your project under /workspace before running codex or ollama-local.'
 Write-Host ''
 
 if ($Command -and $Command.Count -gt 0) {
@@ -97,6 +123,6 @@ if ($Command -and $Command.Count -gt 0) {
 }
 
 Write-Host 'Starting interactive PowerShell session...'
-Write-Host '- Container defaults: use `ollama-local` or `ollama run <model>`.'
+Write-Host '- Container defaults: use `codex`, `codex-local`, `ollama-local`, or `ollama run <model>`.'
 pwsh -NoLogo
 exit $LASTEXITCODE
