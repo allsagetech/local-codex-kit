@@ -1,10 +1,44 @@
 # Local Codex Kit (Codex + Ollama)
 
-This repo provides a container-only offline runtime for Codex CLI backed by a local Ollama server. The default image pre-pulls:
+This repo provides a container-only local Codex workflow backed by an embedded Ollama server. The default image pre-pulls:
 
 - `gpt-oss:20b`
 
 The image installs both `ollama` and `codex`. At runtime the container stays offline with `network_mode: "none"`, and `codex` is preconfigured to talk only to the embedded Ollama endpoint at `http://127.0.0.1:11434/v1`.
+
+## What "offline" means here
+
+After the image has been built and the model has been pulled, runtime is local-only:
+
+- Docker disables container networking with `network_mode: "none"`
+- Codex talks to `http://127.0.0.1:11434/v1` inside the same container
+- Ollama model state stays in `/root/.ollama`
+
+The first build is not network-free. The Dockerfile downloads Ubuntu packages, PowerShell, Ollama, the Codex CLI binary, and any Ollama models you request. If you need a truly air-gapped first build, you need to pre-stage those artifacts in your own mirror or modify the image build to consume local files only.
+
+## Recommended path
+
+If your goal is "use `gpt-oss` with Codex and keep runtime 100% offline", this is the shortest path:
+
+1. Build the image with the model you want baked in:
+
+```powershell
+docker compose build local-codex-kit
+```
+
+2. Start the offline container shell:
+
+```powershell
+docker compose run --rm local-codex-kit
+```
+
+3. Inside the container, use Codex against local Ollama:
+
+```powershell
+codex-local
+```
+
+`codex-local` is the safest default inside this Docker setup because it bypasses Codex's own inner sandbox and approval flow while Docker is already acting as the outer isolation boundary.
 
 ## Quick start
 
@@ -41,7 +75,7 @@ ollama-local
 ollama run gpt-oss:20b
 ```
 
-`ollama serve` starts automatically when the container boots. Startup also writes `/root/.codex/config.toml` so plain `codex` uses the local `oss` provider by default. `codex-local` is a convenience wrapper for `codex --profile oss --dangerously-bypass-approvals-and-sandbox`, which is often the easiest mode when Docker is already the outer sandbox. `ollama-local` runs `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` if you set it; otherwise it uses the first configured model. Runtime networking stays disabled because `docker compose` runs with `network_mode: "none"`.
+`ollama serve` starts automatically when the container boots. Startup also writes `/root/.codex/config.toml` so plain `codex` uses the local `oss` provider by default. `codex-local` is a convenience wrapper for `codex --profile oss --model <current-model> --dangerously-bypass-approvals-and-sandbox`, which is often the easiest mode when Docker is already the outer sandbox. `ollama-local` runs `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` if you set it; otherwise it uses the first configured model. Runtime networking stays disabled because `docker compose` runs with `network_mode: "none"`.
 
 If you want both `codex` and `ollama-local` to use the 120B model by default:
 
@@ -51,6 +85,13 @@ docker compose run --rm local-codex-kit
 ```
 
 The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is about 14 GB.
+
+## Which command to use
+
+- `codex`: uses the generated `/root/.codex/config.toml` and should already target local Ollama
+- `codex-local`: same local model target, but also disables Codex's inner sandbox and approvals
+- `ollama-local`: runs the default Ollama model directly without the Codex agent
+- `ollama run gpt-oss:20b`: explicit direct Ollama invocation
 
 ## Workspace flow
 
@@ -77,15 +118,21 @@ codex
 
 The workspace persists across container runs because it lives in a named Docker volume.
 
-## Offline behavior
+## Model changes
 
-After the image is built and your Ollama model is present, runtime is local-only:
+If a model was not pulled during build and networking is disabled, Codex cannot fetch it later. Rebuild with the model listed in `LOCAL_CODEX_OLLAMA_PULL_MODELS`, or run a separate network-enabled preparation step before using the offline runtime.
 
-- Docker disables container networking with `network_mode: "none"`
-- Codex talks to `http://127.0.0.1:11434/v1` inside the same container
-- Ollama model state stays in `/root/.ollama`
+Common examples:
 
-If a model was not pulled during build and networking is disabled, Codex cannot fetch it later. Rebuild with the model listed in `LOCAL_CODEX_OLLAMA_PULL_MODELS`, or start a networked build step separately before using the offline runtime.
+```powershell
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b'
+docker compose build local-codex-kit
+```
+
+```powershell
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b,gpt-oss:120b'
+docker compose build local-codex-kit
+```
 
 ## State and rebuilds
 
