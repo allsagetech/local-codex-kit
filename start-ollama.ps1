@@ -71,6 +71,11 @@ if ($StartupTimeoutSec -le 0) {
     $StartupTimeoutSec = Get-EnvInt -Name 'LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC' -DefaultValue 300
 }
 
+$contextLength = Get-EnvInt -Name 'LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH' -DefaultValue 65536
+if ($contextLength -gt 0) {
+    $env:OLLAMA_CONTEXT_LENGTH = "$contextLength"
+}
+
 $baseUrl = "http://$BindHost`:$Port"
 
 $ollama = Get-Command ollama -ErrorAction SilentlyContinue
@@ -132,6 +137,7 @@ if (-not (Test-OllamaEndpointReady -BaseUrl $baseUrl)) {
 
 [pscustomobject]@{
     started = $started
+    contextLength = $contextLength
     modelAlias = $ModelAlias
     ollamaBaseUrl = $baseUrl
     processId = $processId

@@ -12,17 +12,23 @@ services:
     ports: []
     expose: []
     environment:
+      CODEX_HOME: /root/.codex
       LOCAL_CODEX_WORKSPACE: /workspace
       LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
       LOCAL_CODEX_OLLAMA_ENABLE: ${LOCAL_CODEX_OLLAMA_ENABLE:-1}
       LOCAL_CODEX_OLLAMA_PORT: ${LOCAL_CODEX_OLLAMA_PORT:-11434}
       LOCAL_CODEX_OLLAMA_MODEL_ALIAS: ${LOCAL_CODEX_OLLAMA_MODEL_ALIAS:-}
+      LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH: ${LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH:-65536}
       LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC:-300}
       LOCAL_CODEX_OLLAMA_REQUIRE_READY: ${LOCAL_CODEX_OLLAMA_REQUIRE_READY:-0}
+      LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
+      LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
     volumes:
       - local-codex-kit-workspace:/workspace
       - local-codex-kit-ollama:/root/.ollama
+      - local-codex-kit-codex:/root/.codex
 
 volumes:
   local-codex-kit-workspace:
   local-codex-kit-ollama:
+  local-codex-kit-codex:

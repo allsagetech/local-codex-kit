@@ -1,22 +1,25 @@
-# Local Codex Kit (Ollama-only)
+# Local Codex Kit (Codex + Ollama in Docker)
 
-This repo now uses embedded `ollama` directly instead of the Codex CLI. The default image pre-pulls:
+This repo now follows the Ollama Codex integration inside the container instead of on the host:
 
-- `gpt-oss:20b`
+- installs the OpenAI `codex` CLI in the image
+- runs `ollama serve` inside the same container
+- defaults to `gpt-oss:20b`
+- keeps runtime networking disabled with `network_mode: "none"`
 
-At runtime the container stays offline with `network_mode: "none"`, and `ollama serve` runs inside the same container.
+The primary workflow is `codex --oss` inside Docker. A convenience wrapper, `codex-local`, is also available and expands to the container-safe defaults for this repo.
 
 Command blocks below are labeled either as host-side PowerShell or as commands to run inside the container.
 
-## What "offline" means here
+## What this matches
 
-After the image has been built and the model has been pulled, runtime is local-only:
+This repo implements the Ollama manual setup for Codex:
 
-- Docker disables container networking with `network_mode: "none"`
-- Ollama serves locally on `http://127.0.0.1:11434`
-- Ollama model state stays in `/root/.ollama`
+- install `@openai/codex`
+- run `codex --oss`
+- use a model with a context window of at least 64k tokens
 
-The first build is not network-free. The Dockerfile still downloads Ubuntu packages, PowerShell, Ollama, and any Ollama models you request. If you need a truly air-gapped first build, you need to pre-stage those artifacts in your own mirror or modify the image build to consume local files only.
+Because Codex's Linux sandbox can be unreliable inside Docker, this image configures Codex to use `sandbox_mode = "danger-full-access"` with `approval_policy = "on-request"` and relies on Docker isolation instead. Runtime networking still stays disabled at the container level.
 
 ## Quick start
 
@@ -33,31 +36,40 @@ Inside the container:
 New-Item -ItemType Directory -Force /workspace/scratch | Out-Null
 Set-Location /workspace/scratch
 ollama list
-ollama-local
+codex-local
 ```
 
-`ollama serve` starts automatically when the container boots. `ollama-local` uses `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` if you set it; otherwise it uses the first configured pulled model.
-
-If you want to verify what is available first:
+Equivalent manual command inside the container:
 
 ```powershell
-ollama list
+codex --oss -m gpt-oss:20b
 ```
 
-If you want to use the 120B model on the next container run, set this in the host shell before starting the container:
+`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled model and the default Codex target unless you override it.
+
+## Default behavior
+
+- `codex-local`: runs `codex --oss` with Docker-safe defaults and `gpt-oss:20b`
+- `codex --oss`: the upstream Ollama manual flow; the container seeds the OSS base URL and Codex config for you
+- `ollama-local`: runs the default Ollama model directly
+- `ollama list`: shows installed models
+
+## Context length
+
+Ollama recommends at least 64k tokens for coding tools like Codex. This repo sets:
+
+- `LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH=65536`
+
+That value is passed to `ollama serve` as `OLLAMA_CONTEXT_LENGTH`.
+
+To change it for the next run:
 
 ```powershell
-$env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
+$env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH='131072'
 docker compose run --rm local-codex-kit
 ```
 
-The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is about 14 GB.
-
-## Which command to use
-
-- `ollama-local`: runs the default configured Ollama model directly
-- `ollama run gpt-oss:20b`: explicit direct Ollama invocation
-- `ollama list`: shows installed models
+Make sure your hardware can support the larger context window.
 
 ## Workspace flow
 
@@ -77,7 +89,7 @@ Inside the container:
 
 ```powershell
 Set-Location /workspace/my-repo
-ollama-local
+codex-local
 ```
 
 The workspace persists across container runs because it lives in a named Docker volume.
@@ -100,12 +112,22 @@ docker compose build local-codex-kit
 
 Set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` to skip build-time pulls entirely.
 
+If you want Codex to target a different pre-pulled model on the next container run:
+
+```powershell
+$env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
+docker compose run --rm local-codex-kit
+```
+
+The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is about 14 GB.
+
 ## State and rebuilds
 
 The default Compose service keeps runtime state in Docker volumes:
 
 - `/workspace`
 - `/root/.ollama`
+- `/root/.codex`
 
 Rebuilding the image updates the launcher code at `/opt/local-codex-kit` without clearing those volumes:
 
@@ -121,23 +143,24 @@ If Ollama startup fails, the entrypoint prints the log file paths from `/tmp/loc
 Useful checks inside the container:
 
 ```powershell
+codex --version
 ollama list
 Get-ChildItem /tmp/local-codex-kit
 Get-Content /tmp/local-codex-kit/ollama.err.log -Tail 100
 Get-Content /tmp/local-codex-kit/ollama.out.log -Tail 100
 ```
 
-If a model was not pulled during build, runtime networking is disabled, and the model is missing from `/root/.ollama`, direct `ollama run` commands will fail until you rebuild with that model included.
+If a model was not pulled during build, runtime networking is disabled, and the model is missing from `/root/.ollama`, `codex --oss` and `ollama run` will fail until you rebuild with that model included.
 
 ## Compatibility note
 
-The repo name, Compose service name, and environment variables still use the `local-codex-kit` and `LOCAL_CODEX_*` names for backward compatibility. The runtime path is now Ollama-only.
+The repo name, Compose service name, and environment variables still use the `local-codex-kit` and `LOCAL_CODEX_*` names for backward compatibility.
 
 ## Files
 
-- `Dockerfile`: builds the image, installs PowerShell and Ollama, and pre-pulls configured models
+- `Dockerfile`: builds the image, installs PowerShell, Node 22, Codex CLI, and Ollama, then pre-pulls configured models
 - `docker-compose.yml`: defines the offline container runtime and Docker-managed volumes
-- `docker-entrypoint.ps1`: starts Ollama, loads the shell helpers, and opens the container shell
-- `docker-profile.ps1`: adds the `ollama-local` convenience command
+- `docker-entrypoint.ps1`: starts Ollama, seeds the Codex OSS config, loads the shell helpers, and opens the container shell
+- `docker-profile.ps1`: adds the `codex-local`, `codex-ollama`, and `ollama-local` convenience commands
 - `pull-ollama-models.ps1`: pulls the configured Ollama models during image build
-- `start-ollama.ps1`: launches `ollama serve` and waits for readiness
+- `start-ollama.ps1`: launches `ollama serve` with the configured context length and waits for readiness
