@@ -6,6 +6,8 @@ This repo provides a container-only local Codex workflow backed by an embedded O
 
 The image installs both `ollama` and `codex`. At runtime the container stays offline with `network_mode: "none"`, and `codex` is preconfigured to talk only to the embedded Ollama endpoint at `http://127.0.0.1:11434/v1`.
 
+Ollama still uses its native tags like `gpt-oss:20b`. On startup, the launcher creates a local alias like `gpt-oss-20b` for Codex so Codex can use its built-in model metadata without changing the pulled Ollama tag.
+
 Command blocks below are labeled either as host-side PowerShell or as commands to run inside the container.
 
 ## What "offline" means here
@@ -56,6 +58,8 @@ codex-local
 ```
 
 `ollama serve` starts automatically when the container boots. Startup also writes `/root/.codex/config.toml` so plain `codex` uses the local `oss` provider by default. `codex-local` is a convenience wrapper for `codex --profile oss --model <current-model> --dangerously-bypass-approvals-and-sandbox`, which is often the easiest mode when Docker is already the outer sandbox. `ollama-local` runs `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` if you set it; otherwise it uses the first configured model. Runtime networking stays disabled because `docker compose` runs with `network_mode: "none"`.
+
+If you previously saw `Model metadata for 'gpt-oss-20b' not found`, rebuild the image and restart the container so the startup alias logic is present. Existing `/root/.ollama` state is preserved across rebuilds.
 
 If you want to verify what is available first:
 

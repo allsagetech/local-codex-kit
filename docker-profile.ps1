@@ -19,6 +19,35 @@ function Get-DefaultOllamaModel {
     return 'gpt-oss:20b'
 }
 
+function Convert-ToCodexModelName {
+    param(
+        [string]$ModelName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ModelName)) {
+        return 'gpt-oss-20b'
+    }
+
+    $resolvedModel = $ModelName.Trim()
+    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
+        return "gpt-oss-$($Matches[1])"
+    }
+
+    if ($resolvedModel -match '^gpt-oss:(.+)$') {
+        return "gpt-oss-$($Matches[1])"
+    }
+
+    return $resolvedModel
+}
+
+function Get-DefaultCodexModel {
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_CODEX_MODEL_ALIAS)) {
+        return $env:LOCAL_CODEX_CODEX_MODEL_ALIAS
+    }
+
+    return Convert-ToCodexModelName -ModelName (Get-DefaultOllamaModel)
+}
+
 function ollama-local {
     $model = Get-DefaultOllamaModel
 
@@ -26,7 +55,7 @@ function ollama-local {
 }
 
 function codex-local {
-    $model = Get-DefaultOllamaModel
+    $model = Get-DefaultCodexModel
 
     & codex --profile oss --model $model --dangerously-bypass-approvals-and-sandbox @args
 }
