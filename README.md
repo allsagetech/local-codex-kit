@@ -6,6 +6,8 @@ This repo provides a container-only local Codex workflow backed by an embedded O
 
 The image installs both `ollama` and `codex`. At runtime the container stays offline with `network_mode: "none"`, and `codex` is preconfigured to talk only to the embedded Ollama endpoint at `http://127.0.0.1:11434/v1`.
 
+Command blocks below are labeled either as host-side PowerShell or as commands to run inside the container.
+
 ## What "offline" means here
 
 After the image has been built and the model has been pulled, runtime is local-only:
@@ -18,21 +20,16 @@ The first build is not network-free. The Dockerfile downloads Ubuntu packages, P
 
 ## Recommended path
 
-If your goal is "use `gpt-oss` with Codex and keep runtime 100% offline", this is the shortest path:
+If your goal is "use `gpt-oss` with Codex and keep runtime 100% offline", this is the shortest path.
 
-1. Build the image with the model you want baked in:
+From a host PowerShell:
 
 ```powershell
 docker compose build local-codex-kit
-```
-
-2. Start the offline container shell:
-
-```powershell
 docker compose run --rm local-codex-kit
 ```
 
-3. Inside the container, use Codex against local Ollama:
+Inside the container:
 
 ```powershell
 codex-local
@@ -42,42 +39,31 @@ codex-local
 
 ## Quick start
 
-1. Build the image:
+From a host PowerShell:
 
 ```powershell
 docker compose build local-codex-kit
-```
-
-To override the default model list before building:
-
-```powershell
-$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b,gpt-oss:120b'
-docker compose build local-codex-kit
-```
-
-Set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` to skip build-time pulls entirely.
-
-2. Start a shell inside the container:
-
-```powershell
 docker compose run --rm local-codex-kit
 ```
 
-3. Inside the container, work from `/workspace`:
+Inside the container, create a workspace directory and start Codex:
 
 ```powershell
 New-Item -ItemType Directory -Force /workspace/scratch | Out-Null
 Set-Location /workspace/scratch
 ollama list
-codex
 codex-local
-ollama-local
-ollama run gpt-oss:20b
 ```
 
 `ollama serve` starts automatically when the container boots. Startup also writes `/root/.codex/config.toml` so plain `codex` uses the local `oss` provider by default. `codex-local` is a convenience wrapper for `codex --profile oss --model <current-model> --dangerously-bypass-approvals-and-sandbox`, which is often the easiest mode when Docker is already the outer sandbox. `ollama-local` runs `LOCAL_CODEX_OLLAMA_MODEL_ALIAS` if you set it; otherwise it uses the first configured model. Runtime networking stays disabled because `docker compose` runs with `network_mode: "none"`.
 
-If you want both `codex` and `ollama-local` to use the 120B model by default:
+If you want to verify what is available first:
+
+```powershell
+ollama list
+```
+
+If you want to use the 120B model on the next container run, set this in the host shell before starting the container:
 
 ```powershell
 $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
@@ -95,32 +81,30 @@ The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is a
 
 ## Workspace flow
 
-Use the Docker-managed `/workspace` volume for the code you want to work on. One straightforward host-to-container import flow is:
-
-1. Start a named session:
+From a host PowerShell, start a named session:
 
 ```powershell
 docker compose run --name local-codex-kit-session local-codex-kit
 ```
 
-2. From another host shell, copy a repo into the workspace:
+From another host PowerShell, copy your repo into the workspace:
 
 ```powershell
 docker cp C:\path\to\repo\. local-codex-kit-session:/workspace/my-repo
 ```
 
-3. Back in the container:
+Inside the container:
 
 ```powershell
 Set-Location /workspace/my-repo
-codex
+codex-local
 ```
 
 The workspace persists across container runs because it lives in a named Docker volume.
 
 ## Model changes
 
-If a model was not pulled during build and networking is disabled, Codex cannot fetch it later. Rebuild with the model listed in `LOCAL_CODEX_OLLAMA_PULL_MODELS`, or run a separate network-enabled preparation step before using the offline runtime.
+If a model was not pulled during build and networking is disabled, Codex cannot fetch it later. Set `LOCAL_CODEX_OLLAMA_PULL_MODELS` before rebuilding the image on the host.
 
 Common examples:
 
@@ -133,6 +117,8 @@ docker compose build local-codex-kit
 $env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b,gpt-oss:120b'
 docker compose build local-codex-kit
 ```
+
+Set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` to skip build-time pulls entirely.
 
 ## State and rebuilds
 
@@ -154,7 +140,7 @@ For a full reset:
 docker compose down -v
 ```
 
-That removes the workspace and Ollama state.
+That clears both the workspace and Ollama state.
 
 ## Files that matter
 
