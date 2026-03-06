@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 ARG LOCAL_CODEX_EMBEDDED_MODEL_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf
 ARG LOCAL_CODEX_EMBEDDED_MODEL_URL=
 ARG LOCAL_CODEX_EMBEDDED_MODEL_SHA256=
-ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=qwen3-coder
+ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=qwen3-coder,qwen2.5-coder:32b
 ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
 
 WORKDIR /opt/local-codex-kit

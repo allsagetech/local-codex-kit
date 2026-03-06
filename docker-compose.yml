@@ -6,7 +6,7 @@ services:
         LOCAL_CODEX_EMBEDDED_MODEL_FILE: ${LOCAL_CODEX_EMBEDDED_MODEL_FILE:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
         LOCAL_CODEX_EMBEDDED_MODEL_URL: ${LOCAL_CODEX_EMBEDDED_MODEL_URL:-}
         LOCAL_CODEX_EMBEDDED_MODEL_SHA256: ${LOCAL_CODEX_EMBEDDED_MODEL_SHA256:-}
-        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder}
+        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder,qwen2.5-coder:32b}
     image: allsagetech/local-codex-kit:latest
     network_mode: "none"
     stdin_open: true
@@ -16,7 +16,7 @@ services:
     expose: []
     environment:
       LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder}
+      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen3-coder,qwen2.5-coder:32b}
       LOCAL_CODEX_EMBEDDED_MODEL_PATH: ${LOCAL_CODEX_EMBEDDED_MODEL_PATH:-/opt/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf}
       LOCAL_CODEX_EMBEDDED_MODEL_ALIAS: ${LOCAL_CODEX_EMBEDDED_MODEL_ALIAS:-qwen2.5-coder-7b-instruct}
       LOCAL_CODEX_EMBEDDED_CONTEXT: ${LOCAL_CODEX_EMBEDDED_CONTEXT:-8192}
