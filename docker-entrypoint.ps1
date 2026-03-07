@@ -50,16 +50,7 @@ function Convert-ToCodexModelName {
         return ''
     }
 
-    $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^gpt-oss:(.+)$') {
-        return "openai/gpt-oss-$($Matches[1])"
-    }
-
-    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "openai/gpt-oss-$($Matches[1])"
-    }
-
-    return $resolvedModel
+    return (Convert-ToOllamaModelName -ModelName $ModelName)
 }
 
 function Convert-ToTomlString {
@@ -146,7 +137,7 @@ $env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) {
 } elseif ($defaultOllamaModel) {
     Convert-ToCodexModelName -ModelName $defaultOllamaModel
 } else {
-    'openai/gpt-oss-20b'
+    'gpt-oss:20b'
 }
 
 $workspace = $env:LOCAL_CODEX_WORKSPACE

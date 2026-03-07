@@ -43,14 +43,14 @@ codex-local
 Equivalent manual command inside the container:
 
 ```powershell
-codex --oss -m openai/gpt-oss-20b
+codex --oss -m gpt-oss:20b
 ```
 
-`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled Ollama tag, and `openai/gpt-oss-20b` is the default Codex model name. That follows the Ollama Codex docs and avoids Codex's fallback metadata warning for `gpt-oss:20b`.
+`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled Ollama tag and the default Codex model name.
 
 ## Default behavior
 
-- `codex-local`: runs `codex --oss` with Docker-safe defaults and `openai/gpt-oss-20b`
+- `codex-local`: runs `codex --oss` with Docker-safe defaults and `gpt-oss:20b`
 - `codex --oss`: the upstream Ollama manual flow; the container seeds the OSS base URL and Codex config for you
 - `ollama-local`: runs the default Ollama model directly
 - `ollama list`: shows installed models
@@ -178,7 +178,15 @@ Get-Content /tmp/local-codex-kit/ollama.err.log -Tail 100
 Get-Content /tmp/local-codex-kit/ollama.out.log -Tail 100
 ```
 
+If `codex-local` prints `Pulling model openai/gpt-oss-20b... Error: OSS setup setup failed`, you are using the wrong model name for Ollama. Use `gpt-oss:20b` instead:
+
+```powershell
+codex-local --model gpt-oss:20b
+```
+
 If a model was not pulled during build, runtime networking is disabled, and the model is missing from `/root/.ollama`, `codex --oss` and `ollama run` will fail until you rebuild with that model included.
+
+If `ollama list` is empty even after a rebuild, an older Docker volume is probably masking the image's pre-pulled model data. Remove the Docker volume that backs `/root/.ollama` on the host, typically `local-codex-kit_local-codex-kit-ollama`, and start the container again.
 
 ## Compatibility note
 
