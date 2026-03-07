@@ -1,5 +1,7 @@
 FROM ubuntu:22.04
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=gpt-oss:20b
 ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
 ARG NODE_LINUX_ARCHIVE_URL=https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz
@@ -8,18 +10,44 @@ ARG ZARF_RELEASE_API_URL=https://api.github.com/repos/zarf-dev/zarf/releases/lat
 
 WORKDIR /opt/local-codex-kit
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl git ca-certificates wget apt-transport-https software-properties-common gnupg zstd xz-utils jq python3 python3-pip python3-venv python-is-python3 golang-go build-essential clang unzip nano vim-tiny \
-    && mkdir -p /etc/apt/keyrings /usr/local/bin \
-    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list \
-    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && wget -q https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb \
+RUN set -eux \
     && apt-get update \
-    && apt-get install -y --no-install-recommends powershell code google-chrome-stable \
+    && apt-get install -y --no-install-recommends \
+        apt-transport-https \
+        build-essential \
+        ca-certificates \
+        clang \
+        curl \
+        git \
+        gnupg \
+        golang-go \
+        jq \
+        nano \
+        python-is-python3 \
+        python3 \
+        python3-pip \
+        python3-venv \
+        software-properties-common \
+        unzip \
+        vim-tiny \
+        wget \
+        xz-utils \
+        zstd \
+    && install -d -m 0755 /etc/apt/keyrings /usr/local/bin \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --batch --yes --dearmor > /etc/apt/keyrings/microsoft.gpg \
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --batch --yes --dearmor > /etc/apt/keyrings/google-chrome.gpg \
+    && chmod 0644 /etc/apt/keyrings/microsoft.gpg /etc/apt/keyrings/google-chrome.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && wget -qO /tmp/packages-microsoft-prod.deb https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb \
+    && dpkg -i /tmp/packages-microsoft-prod.deb \
+    && rm -f /tmp/packages-microsoft-prod.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends code google-chrome-stable powershell \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux \
     && curl -fsSL "${NODE_LINUX_ARCHIVE_URL}" | tar -xJ --strip-components=1 -C /usr/local \
     && npm install -g @openai/codex \
     && curl -fsSL "${OLLAMA_LINUX_ARCHIVE_URL}" | tar --zstd -x -C /usr \
@@ -29,17 +57,18 @@ RUN apt-get update \
     && install /tmp/linux-amd64/helm /usr/local/bin/helm \
     && rm -rf /tmp/helm.tgz /tmp/linux-amd64 \
     && ZARF_VERSION="$(curl -fsSL "${ZARF_RELEASE_API_URL}" | jq -r '.tag_name')" \
-    && ZARF_VERSION_STRIPPED="${ZARF_VERSION#v}" \
-    && curl -fsSL "https://github.com/zarf-dev/zarf/releases/download/${ZARF_VERSION}/zarf_${ZARF_VERSION_STRIPPED}_Linux_amd64" -o /usr/local/bin/zarf \
+    && curl -fsSL "https://github.com/zarf-dev/zarf/releases/download/${ZARF_VERSION}/zarf_${ZARF_VERSION}_Linux_amd64" -o /usr/local/bin/zarf \
     && chmod +x /usr/local/bin/zarf \
-    && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium \
+    && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium
+
+RUN set -eux \
     && dpkg-query -W -f='${binary:Package} ${Version}\n' code \
     && google-chrome-stable --version \
     && chromium --version \
     && git --version \
     && go version \
     && python --version \
-    && pip --version \
+    && python -m pip --version \
     && helm version --short \
     && zarf version \
     && gcc --version \
@@ -49,9 +78,7 @@ RUN apt-get update \
     && npm --version \
     && codex --version \
     && ollama -v \
-    && pwsh --version \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && pwsh --version
 
 ENV CODEX_HOME=/root/.codex
 ENV LOCAL_CODEX_OLLAMA_PULL_MODELS=${LOCAL_CODEX_OLLAMA_PULL_MODELS}
