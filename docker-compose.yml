@@ -1,0 +1,49 @@
+services:
+  local-codex-kit:
+    build:
+      context: .
+      args:
+        LOCAL_CODEX_BASE_IMAGE: ${LOCAL_CODEX_BASE_IMAGE:-ubuntu:22.04}
+        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+    image: allsagetech/local-codex-kit:latest
+    network_mode: "none"
+    init: true
+    stdin_open: true
+    tty: true
+    read_only: true
+    working_dir: /workspace
+    ports: []
+    expose: []
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:exec,mode=1777
+      - /run:mode=755
+    environment:
+      HOME: /home/codex
+      CODEX_HOME: /home/codex/.codex
+      LOCAL_CODEX_WORKSPACE: /workspace
+      LOCAL_CODEX_OLLAMA_MODELS: /opt/local-codex-kit/ollama-models
+      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+      LOCAL_CODEX_OLLAMA_ENABLE: ${LOCAL_CODEX_OLLAMA_ENABLE:-1}
+      LOCAL_CODEX_OLLAMA_PORT: ${LOCAL_CODEX_OLLAMA_PORT:-11434}
+      LOCAL_CODEX_OLLAMA_MODEL_ALIAS: ${LOCAL_CODEX_OLLAMA_MODEL_ALIAS:-}
+      LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH: ${LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH:-65536}
+      LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC:-300}
+      LOCAL_CODEX_OLLAMA_REQUIRE_READY: ${LOCAL_CODEX_OLLAMA_REQUIRE_READY:-0}
+      LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
+      LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
+    volumes:
+      - local-codex-kit-workspace:/workspace
+      - local-codex-kit-ollama-home:/home/codex/.ollama
+      - local-codex-kit-codex-home:/home/codex/.codex
+      - type: bind
+        source: ${LOCAL_CODEX_HOST_PROJECT_PATH:-./host-project}
+        target: /workspace/project
+
+volumes:
+  local-codex-kit-workspace:
+  local-codex-kit-ollama-home:
+  local-codex-kit-codex-home:
