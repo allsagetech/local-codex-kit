@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen2.5-coder:7b}
     image: allsagetech/local-codex-kit:latest
     network_mode: "none"
     stdin_open: true
@@ -14,7 +14,7 @@ services:
     environment:
       CODEX_HOME: /root/.codex
       LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-qwen2.5-coder:7b}
       LOCAL_CODEX_OLLAMA_ENABLE: ${LOCAL_CODEX_OLLAMA_ENABLE:-1}
       LOCAL_CODEX_OLLAMA_PORT: ${LOCAL_CODEX_OLLAMA_PORT:-11434}
       LOCAL_CODEX_OLLAMA_MODEL_ALIAS: ${LOCAL_CODEX_OLLAMA_MODEL_ALIAS:-}

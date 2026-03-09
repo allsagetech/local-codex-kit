@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=gpt-oss:20b
+ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=qwen2.5-coder:7b
 ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
 ARG NODE_LINUX_ARCHIVE_URL=https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz
 ARG HELM_RELEASE_API_URL=https://api.github.com/repos/helm/helm/releases/latest

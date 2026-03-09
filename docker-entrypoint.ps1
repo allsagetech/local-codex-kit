@@ -137,7 +137,7 @@ $env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) {
 } elseif ($defaultOllamaModel) {
     Convert-ToCodexModelName -ModelName $defaultOllamaModel
 } else {
-    'gpt-oss:20b'
+    'qwen2.5-coder:7b'
 }
 
 $workspace = $env:LOCAL_CODEX_WORKSPACE

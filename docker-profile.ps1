@@ -16,7 +16,7 @@ function Get-DefaultOllamaModel {
     } catch {
     }
 
-    return 'gpt-oss:20b'
+    return 'qwen2.5-coder:7b'
 }
 
 function Convert-ToOllamaCompatibleModelName {

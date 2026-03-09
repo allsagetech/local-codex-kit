@@ -4,7 +4,7 @@ This repo now follows the Ollama Codex integration inside the container instead 
 
 - installs the OpenAI `codex` CLI in the image
 - runs `ollama serve` inside the same container
-- defaults to `gpt-oss:20b`
+- defaults to `qwen2.5-coder:7b`
 - keeps runtime networking disabled with `network_mode: "none"`
 - includes VS Code, Chromium-compatible browser tooling, Git, Go, Python, Helm, Zarf, Node 22, and Linux build tools
 
@@ -43,14 +43,14 @@ codex-local
 Equivalent manual command inside the container:
 
 ```powershell
-codex --oss -m gpt-oss:20b
+codex --oss -m qwen2.5-coder:7b
 ```
 
-`ollama serve` starts automatically when the container boots. `gpt-oss:20b` is the default pulled Ollama tag and the default Codex model name.
+`ollama serve` starts automatically when the container boots. `qwen2.5-coder:7b` is the default pulled Ollama tag and the default Codex model name.
 
 ## Default behavior
 
-- `codex-local`: runs `codex --oss` with Docker-safe defaults and `gpt-oss:20b`
+- `codex-local`: runs `codex --oss` with Docker-safe defaults and `qwen2.5-coder:7b`
 - `codex --oss`: the upstream Ollama manual flow; the container seeds the OSS base URL and Codex config for you
 - `ollama-local`: runs the default Ollama model directly
 - `ollama list`: shows installed models
@@ -121,12 +121,12 @@ If a model was not pulled during build and networking is disabled, Ollama cannot
 Common examples:
 
 ```powershell
-$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b'
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='qwen2.5-coder:7b'
 docker compose build local-codex-kit
 ```
 
 ```powershell
-$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='gpt-oss:20b,gpt-oss:120b'
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='qwen2.5-coder:7b,gpt-oss:120b'
 docker compose build local-codex-kit
 ```
 
@@ -141,7 +141,7 @@ docker compose run --rm local-codex-kit
 
 If you ever need to force a Codex model name manually, set `LOCAL_CODEX_CODEX_MODEL` explicitly.
 
-The `gpt-oss:120b` Ollama tag is about 65 GB. The default `gpt-oss:20b` tag is about 14 GB.
+The `gpt-oss:120b` Ollama tag is about 65 GB. The default `qwen2.5-coder:7b` tag is substantially smaller.
 
 ## State and rebuilds
 
