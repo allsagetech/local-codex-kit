@@ -63,23 +63,58 @@ function Convert-ToLlamaRepoId {
     }
 
     $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^ggml-org/.+-GGUF$') {
+    if ($resolvedModel -match '^[^/]+/.+-GGUF$') {
         return $resolvedModel
     }
 
     if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "ggml-org/gpt-oss-$($Matches[1])-GGUF"
+        return "unsloth/gpt-oss-$($Matches[1])-GGUF"
     }
 
     if ($resolvedModel -match '^gpt-oss:(.+)$') {
-        return "ggml-org/gpt-oss-$($Matches[1])-GGUF"
+        return "unsloth/gpt-oss-$($Matches[1])-GGUF"
     }
 
     if ($resolvedModel -match '^gpt-oss-(.+)$') {
-        return "ggml-org/gpt-oss-$($Matches[1])-GGUF"
+        return "unsloth/gpt-oss-$($Matches[1])-GGUF"
     }
 
     return $resolvedModel
+}
+
+function Get-LlamaDownloadIncludePatterns {
+    param(
+        [string]$ModelName
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLAMACPP_GGUF_INCLUDE)) {
+        return @(
+            $env:LOCAL_CODEX_LLAMACPP_GGUF_INCLUDE.Split(',') |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ModelName)) {
+        return @('*.gguf')
+    }
+
+    $resolvedModel = $ModelName.Trim()
+    if (
+        ($resolvedModel -match '(^|/)gpt-oss-20b($|[-:])') -or
+        ($resolvedModel -eq 'gpt-oss:20b')
+    ) {
+        return @('gpt-oss-20b-Q4_K_M.gguf')
+    }
+
+    if (
+        ($resolvedModel -match '(^|/)gpt-oss-120b($|[-:])') -or
+        ($resolvedModel -eq 'gpt-oss:120b')
+    ) {
+        return @('Q4_K_M/*.gguf', 'gpt-oss-120b-Q4_K_M*.gguf')
+    }
+
+    return @('*.gguf')
 }
 
 function Convert-ToTomlString {

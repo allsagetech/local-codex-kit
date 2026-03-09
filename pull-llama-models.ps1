@@ -25,6 +25,7 @@ $seenAliases = @{}
 foreach ($requestedModel in $requestedModels) {
     $alias = Convert-ToCodexModelName -ModelName $requestedModel
     $repoId = Convert-ToLlamaRepoId -ModelName $requestedModel
+    $includePatterns = @(Get-LlamaDownloadIncludePatterns -ModelName $requestedModel)
 
     if ([string]::IsNullOrWhiteSpace($alias) -or [string]::IsNullOrWhiteSpace($repoId)) {
         throw "Unable to resolve llama.cpp model metadata for '$requestedModel'."
@@ -37,10 +38,15 @@ foreach ($requestedModel in $requestedModels) {
     $targetDirectory = Join-Path $env:LOCAL_CODEX_LLAMACPP_MODELS $alias
     New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
 
-    Write-Host ("Downloading llama.cpp model '{0}' from Hugging Face repo '{1}'..." -f $alias, $repoId)
-    & python -m huggingface_hub download $repoId --local-dir $targetDirectory --include '*.gguf'
+    Write-Host ("Downloading llama.cpp model '{0}' from Hugging Face repo '{1}' with patterns: {2}" -f $alias, $repoId, ($includePatterns -join ', '))
+    $downloadArgs = @('-m', 'huggingface_hub', 'download', $repoId, '--local-dir', $targetDirectory)
+    foreach ($pattern in $includePatterns) {
+        $downloadArgs += @('--include', $pattern)
+    }
+
+    & python @downloadArgs
     if ($LASTEXITCODE -ne 0) {
-        throw ("huggingface_hub download failed for repo '{0}'." -f $repoId)
+        throw ("huggingface_hub download failed for repo '{0}' with include patterns '{1}'." -f $repoId, ($includePatterns -join ', '))
     }
 
     $modelFile = Select-PrimaryGgufFile -ModelDirectory $targetDirectory

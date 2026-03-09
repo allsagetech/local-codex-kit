@@ -21,7 +21,7 @@ The intended workflow is:
 - installs the OpenAI `codex` CLI in the image
 - builds `llama.cpp` tools in the image
 - runs `llama-server` inside the same container
-- defaults to the Hugging Face GGUF repo for `gpt-oss-20b`
+- defaults to the Unsloth GGUF repo for `gpt-oss-20b`
 - stores the workspace and runtime state in Docker-managed volumes
 - stores the baked GGUF payload inside the image at `/opt/local-codex-kit/llama-models`
 - keeps runtime network access disabled
@@ -121,7 +121,7 @@ The default value is:
 $env:LOCAL_CODEX_LLAMACPP_PULL_MODELS='gpt-oss-20b'
 ```
 
-For OpenAI's current `gpt-oss` models, the helper script maps the aliases below to the `ggml-org` GGUF repos that `llama.cpp` can serve:
+For OpenAI's current `gpt-oss` models, the helper script maps the aliases below to the `unsloth` GGUF repos that `llama.cpp` can serve:
 
 - `gpt-oss-20b`
 - `gpt-oss:20b`
@@ -130,10 +130,19 @@ For OpenAI's current `gpt-oss` models, the helper script maps the aliases below 
 - `gpt-oss:120b`
 - `openai/gpt-oss-120b`
 
+By default the build pulls a single lighter-weight `Q4_K_M` quant instead of every GGUF variant.
+
 You can also provide a direct Hugging Face GGUF repo id, for example:
 
 ```powershell
-$env:LOCAL_CODEX_LLAMACPP_PULL_MODELS='ggml-org/gpt-oss-20b-GGUF'
+$env:LOCAL_CODEX_LLAMACPP_PULL_MODELS='unsloth/gpt-oss-20b-GGUF'
+docker compose build local-codex-kit
+```
+
+If you want a different GGUF file pattern, override it before the build:
+
+```powershell
+$env:LOCAL_CODEX_LLAMACPP_GGUF_INCLUDE='gpt-oss-20b-Q8_0.gguf'
 docker compose build local-codex-kit
 ```
 
