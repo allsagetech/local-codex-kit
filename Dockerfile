@@ -91,8 +91,8 @@ RUN set -eux \
     && node --version \
     && npm --version \
     && codex --version \
-    && llama-server --version \
-    && llama-cli --version \
+    && command -v llama-server \
+    && command -v llama-cli \
     && pwsh --version
 
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
