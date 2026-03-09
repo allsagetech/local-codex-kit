@@ -91,7 +91,7 @@ RUN set -eux \
     && codex --version \
     && command -v transformers \
     && command -v huggingface-cli \
-    && command -v pwsh
+    && test -x /opt/microsoft/powershell/7/pwsh
 
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
 ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
@@ -115,9 +115,9 @@ RUN set -eux \
     && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code
 
 RUN set -eux \
-    && HOME="${HOME}" LOCAL_CODEX_HF_CACHE_SEED="${LOCAL_CODEX_HF_CACHE_SEED}" LOCAL_CODEX_MODEL_MANIFEST="${LOCAL_CODEX_MODEL_MANIFEST}" pwsh -NoLogo -NoProfile -File ./pull-official-models.ps1 -Models "${LOCAL_CODEX_OFFICIAL_PULL_MODELS}" \
+    && HOME="${HOME}" LOCAL_CODEX_HF_CACHE_SEED="${LOCAL_CODEX_HF_CACHE_SEED}" LOCAL_CODEX_MODEL_MANIFEST="${LOCAL_CODEX_MODEL_MANIFEST}" /opt/microsoft/powershell/7/pwsh -NoLogo -NoProfile -File ./pull-official-models.ps1 -Models "${LOCAL_CODEX_OFFICIAL_PULL_MODELS}" \
     && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}" /workspace "${LOCAL_CODEX_HF_CACHE_SEED}"
 
 USER ${LOCAL_CODEX_RUNTIME_USER}
 
-ENTRYPOINT ["pwsh", "-NoLogo", "-NoProfile", "-File", "/opt/local-codex-kit/docker-entrypoint.ps1"]
+ENTRYPOINT ["/opt/microsoft/powershell/7/pwsh", "-NoLogo", "-NoProfile", "-File", "/opt/local-codex-kit/docker-entrypoint.ps1"]
