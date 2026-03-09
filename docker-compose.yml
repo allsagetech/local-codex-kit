@@ -25,10 +25,10 @@ services:
       LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
     volumes:
       - local-codex-kit-workspace:/workspace
-      - local-codex-kit-ollama:/root/.ollama
+      - local-codex-kit-ollama-qwen:/root/.ollama
       - local-codex-kit-codex:/root/.codex
 
 volumes:
   local-codex-kit-workspace:
-  local-codex-kit-ollama:
+  local-codex-kit-ollama-qwen:
   local-codex-kit-codex:

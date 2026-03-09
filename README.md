@@ -126,7 +126,7 @@ docker compose build local-codex-kit
 ```
 
 ```powershell
-$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='qwen2.5-coder:7b,gpt-oss:120b'
+$env:LOCAL_CODEX_OLLAMA_PULL_MODELS='qwen2.5-coder:7b'
 docker compose build local-codex-kit
 ```
 
@@ -135,13 +135,11 @@ Set `LOCAL_CODEX_OLLAMA_PULL_MODELS=none` to skip build-time pulls entirely.
 If you want Codex to target a different pre-pulled model on the next container run:
 
 ```powershell
-$env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
+$env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS='qwen2.5-coder:7b'
 docker compose run --rm local-codex-kit
 ```
 
 If you ever need to force a Codex model name manually, set `LOCAL_CODEX_CODEX_MODEL` explicitly.
-
-The `gpt-oss:120b` Ollama tag is about 65 GB. The default `qwen2.5-coder:7b` tag is substantially smaller.
 
 ## State and rebuilds
 
@@ -157,6 +155,8 @@ Rebuilding the image updates the launcher code at `/opt/local-codex-kit` without
 docker compose build local-codex-kit
 docker compose run --rm local-codex-kit
 ```
+
+This repo now uses the `local-codex-kit-ollama-qwen` volume name for `/root/.ollama` so a fresh run starts with the baked-in `qwen2.5-coder:7b` model instead of reusing an older `gpt-oss` volume.
 
 ## Troubleshooting
 
@@ -178,15 +178,9 @@ Get-Content /tmp/local-codex-kit/ollama.err.log -Tail 100
 Get-Content /tmp/local-codex-kit/ollama.out.log -Tail 100
 ```
 
-If `codex-local` prints `Pulling model openai/gpt-oss-20b... Error: OSS setup setup failed`, you are using the wrong model name for Ollama. Use `gpt-oss:20b` instead:
-
-```powershell
-codex-local --model gpt-oss:20b
-```
-
 If a model was not pulled during build, runtime networking is disabled, and the model is missing from `/root/.ollama`, `codex --oss` and `ollama run` will fail until you rebuild with that model included.
 
-If `ollama list` is empty even after a rebuild, an older Docker volume is probably masking the image's pre-pulled model data. Remove the Docker volume that backs `/root/.ollama` on the host, typically `local-codex-kit_local-codex-kit-ollama`, and start the container again.
+If `ollama list` does not show `qwen2.5-coder:7b` after a rebuild, remove any older Docker volume that backed `/root/.ollama` on the host, especially `local-codex-kit_local-codex-kit-ollama`, and start the container again.
 
 ## Compatibility note
 

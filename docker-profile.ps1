@@ -193,7 +193,7 @@ function codex-local {
         -not [string]::IsNullOrWhiteSpace($effectiveModel) -and
         -not (Test-OllamaModelInstalled -ModelName $effectiveModel)
     ) {
-        throw ("Configured Ollama model '{0}' is not installed. Check `ollama list`. If this container is reusing an older `/root/.ollama` volume, remove the Docker volume that backs `/root/.ollama` (typically `local-codex-kit_local-codex-kit-ollama`) and start the container again." -f $effectiveModel)
+        throw ("Configured Ollama model '{0}' is not installed. Check `ollama list`. This repo now uses the `local-codex-kit_local-codex-kit-ollama-qwen` Docker volume for `/root/.ollama`; if Docker is still reusing an older volume such as `local-codex-kit_local-codex-kit-ollama`, remove it and start the container again." -f $effectiveModel)
     }
 
     & codex @resolvedArgs @argumentList
