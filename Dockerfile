@@ -103,17 +103,20 @@ ENV LOCAL_CODEX_LLAMACPP_PULL_MODELS=${LOCAL_CODEX_LLAMACPP_PULL_MODELS}
 
 COPY . .
 
-RUN groupadd --gid "${LOCAL_CODEX_RUNTIME_GID}" "${LOCAL_CODEX_RUNTIME_USER}" \
-    && useradd --uid "${LOCAL_CODEX_RUNTIME_UID}" --gid "${LOCAL_CODEX_RUNTIME_GID}" --create-home --shell /bin/bash "${LOCAL_CODEX_RUNTIME_USER}" \
-    && install -d -m 0755 -o "${LOCAL_CODEX_RUNTIME_USER}" -g "${LOCAL_CODEX_RUNTIME_USER}" \
+RUN set -eux \
+    && if ! getent group "${LOCAL_CODEX_RUNTIME_GID}" >/dev/null; then groupadd --gid "${LOCAL_CODEX_RUNTIME_GID}" "${LOCAL_CODEX_RUNTIME_USER}"; fi \
+    && if ! id -u "${LOCAL_CODEX_RUNTIME_USER}" >/dev/null 2>&1; then useradd --uid "${LOCAL_CODEX_RUNTIME_UID}" --gid "${LOCAL_CODEX_RUNTIME_GID}" --create-home --shell /bin/bash "${LOCAL_CODEX_RUNTIME_USER}"; fi \
+    && install -d -m 0755 -o "${LOCAL_CODEX_RUNTIME_UID}" -g "${LOCAL_CODEX_RUNTIME_GID}" \
         /workspace \
         "${CODEX_HOME}" \
         "${HOME}/.config/powershell" \
         "${LOCAL_CODEX_LLAMACPP_MODELS}" \
     && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
-    && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code \
+    && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code
+
+RUN set -eux \
     && HOME="${HOME}" LOCAL_CODEX_LLAMACPP_MODELS="${LOCAL_CODEX_LLAMACPP_MODELS}" pwsh -NoLogo -NoProfile -File ./pull-llama-models.ps1 -Models "${LOCAL_CODEX_LLAMACPP_PULL_MODELS}" \
-    && chown -R "${LOCAL_CODEX_RUNTIME_USER}:${LOCAL_CODEX_RUNTIME_USER}" "${HOME}" /workspace "${LOCAL_CODEX_LLAMACPP_MODELS}"
+    && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}" /workspace "${LOCAL_CODEX_LLAMACPP_MODELS}"
 
 USER ${LOCAL_CODEX_RUNTIME_USER}
 
