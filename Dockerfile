@@ -49,6 +49,7 @@ RUN set -eux \
     && rm -f /tmp/packages-microsoft-prod.deb \
     && apt-get update \
     && apt-get install -y --no-install-recommends code google-chrome-stable powershell \
+    && if [ ! -x /usr/bin/pwsh ] && [ -x /opt/microsoft/powershell/7/pwsh ]; then ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh; fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
