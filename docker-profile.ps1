@@ -1,4 +1,4 @@
-. (Join-Path (Split-Path -Parent $PSCommandPath) 'llama-models.ps1')
+. (Join-Path (Split-Path -Parent $PSCommandPath) 'official-models.ps1')
 
 function Initialize-PSReadLineHistory {
     if (-not (Get-Module -ListAvailable -Name PSReadLine)) {
@@ -28,22 +28,22 @@ function Initialize-PSReadLineHistory {
     }
 }
 
-function Get-LlamaManifestEntries {
-    $modelRoot = if ($env:LOCAL_CODEX_LLAMACPP_MODELS) { $env:LOCAL_CODEX_LLAMACPP_MODELS } else { '/opt/local-codex-kit/llama-models' }
-    return @(Read-LlamaManifest -ModelRoot $modelRoot)
+function Get-InstalledModelEntries {
+    $manifestPath = if ($env:LOCAL_CODEX_MODEL_MANIFEST) { $env:LOCAL_CODEX_MODEL_MANIFEST } else { '/opt/local-codex-kit/official-models.manifest.json' }
+    return @(Read-ModelManifest -ManifestPath $manifestPath)
 }
 
-function Get-DefaultLlamaModelAlias {
-    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LLAMACPP_MODEL_ALIAS)) {
-        return (Convert-ToCodexModelName -ModelName $env:LOCAL_CODEX_LLAMACPP_MODEL_ALIAS)
+function Get-DefaultModelRepo {
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS)) {
+        return (Convert-ToCanonicalModelName -ModelName $env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS)
     }
 
-    $manifest = @(Get-LlamaManifestEntries)
+    $manifest = @(Get-InstalledModelEntries)
     if ($manifest.Count -gt 0) {
-        return $manifest[0].alias
+        return $manifest[0].repo
     }
 
-    return 'gpt-oss-20b'
+    return 'openai/gpt-oss-20b'
 }
 
 function Normalize-CodexArgumentList {
@@ -61,14 +61,14 @@ function Normalize-CodexArgumentList {
             $resolvedArgs += $value
             if (($index + 1) -lt $ArgumentList.Count) {
                 $index += 1
-                $resolvedArgs += (Convert-ToCodexModelName -ModelName ([string]$ArgumentList[$index]))
+                $resolvedArgs += (Convert-ToCanonicalModelName -ModelName ([string]$ArgumentList[$index]))
             }
 
             continue
         }
 
         if ($value.StartsWith('--model=')) {
-            $resolvedArgs += ('--model=' + (Convert-ToCodexModelName -ModelName $value.Substring(8)))
+            $resolvedArgs += ('--model=' + (Convert-ToCanonicalModelName -ModelName $value.Substring(8)))
             continue
         }
 
@@ -89,14 +89,14 @@ function Get-CodexModelArgument {
 
         if (($value -eq '--model') -or ($value -eq '-m')) {
             if (($index + 1) -lt $ArgumentList.Count) {
-                return (Convert-ToCodexModelName -ModelName ([string]$ArgumentList[$index + 1]))
+                return (Convert-ToCanonicalModelName -ModelName ([string]$ArgumentList[$index + 1]))
             }
 
             return ''
         }
 
         if ($value.StartsWith('--model=')) {
-            return (Convert-ToCodexModelName -ModelName $value.Substring(8))
+            return (Convert-ToCanonicalModelName -ModelName $value.Substring(8))
         }
     }
 
@@ -125,40 +125,27 @@ function Test-HasCodexOption {
     return $false
 }
 
-function Get-LlamaModelEntryOrNull {
+function Ensure-ModelInstalled {
     param(
         [string]$ModelName
     )
 
-    return (Resolve-LlamaModelEntry -Manifest @(Get-LlamaManifestEntries) -ModelName $ModelName)
+    return ($null -ne (Resolve-InstalledModelEntry -Manifest @(Get-InstalledModelEntries) -ModelName $ModelName))
 }
 
-function Ensure-LlamaModelInstalled {
-    param(
-        [string]$ModelName
-    )
+function transformers-local {
+    $modelRepo = Get-DefaultModelRepo
+    $port = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
 
-    return ($null -ne (Get-LlamaModelEntryOrNull -ModelName $ModelName))
-}
-
-function llama-local {
-    $modelAlias = Get-DefaultLlamaModelAlias
-    $modelEntry = Get-LlamaModelEntryOrNull -ModelName $modelAlias
-
-    if ($null -eq $modelEntry) {
-        $modelStore = if ($env:LOCAL_CODEX_LLAMACPP_MODELS) { $env:LOCAL_CODEX_LLAMACPP_MODELS } else { '/opt/local-codex-kit/llama-models' }
-        throw ("Configured llama.cpp model '{0}' is not installed. Check '{1}/manifest.json' or rebuild the image with LOCAL_CODEX_LLAMACPP_PULL_MODELS updated." -f $modelAlias, $modelStore)
-    }
-
-    & llama-cli -m $modelEntry.model_file --jinja @args
+    & transformers chat ("localhost:$port") --model-name-or-path $modelRepo @args
 }
 
 function codex-local {
     $argumentList = Normalize-CodexArgumentList -ArgumentList @($args)
     $defaultModel = if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_CODEX_MODEL)) {
-        Convert-ToCodexModelName -ModelName $env:LOCAL_CODEX_CODEX_MODEL
+        Convert-ToCanonicalModelName -ModelName $env:LOCAL_CODEX_CODEX_MODEL
     } else {
-        Get-DefaultLlamaModelAlias
+        Get-DefaultModelRepo
     }
     $selectedModel = Get-CodexModelArgument -ArgumentList $argumentList
     $effectiveModel = if (-not [string]::IsNullOrWhiteSpace($selectedModel)) {
@@ -169,16 +156,16 @@ function codex-local {
 
     if (
         -not [string]::IsNullOrWhiteSpace($effectiveModel) -and
-        -not (Ensure-LlamaModelInstalled -ModelName $effectiveModel)
+        -not (Ensure-ModelInstalled -ModelName $effectiveModel)
     ) {
-        $modelStore = if ($env:LOCAL_CODEX_LLAMACPP_MODELS) { $env:LOCAL_CODEX_LLAMACPP_MODELS } else { '/opt/local-codex-kit/llama-models' }
-        throw ("Configured llama.cpp model '{0}' is not installed. Check '{1}/manifest.json' or rebuild the image with LOCAL_CODEX_LLAMACPP_PULL_MODELS updated." -f $effectiveModel, $modelStore)
+        $manifestPath = if ($env:LOCAL_CODEX_MODEL_MANIFEST) { $env:LOCAL_CODEX_MODEL_MANIFEST } else { '/opt/local-codex-kit/official-models.manifest.json' }
+        throw ("Configured official model '{0}' is not installed. Check '{1}' or rebuild the image with LOCAL_CODEX_OFFICIAL_PULL_MODELS updated." -f $effectiveModel, $manifestPath)
     }
 
     $resolvedArgs = @(
         '-c', 'model_provider="oss"',
         '-c', ('model_providers.oss.base_url=' + (Convert-ToTomlString -Value $env:CODEX_OSS_BASE_URL)),
-        '-c', 'model_providers.oss.name="Local llama.cpp"'
+        '-c', 'model_providers.oss.name="Official gpt-oss (Transformers)"'
     )
 
     if (-not (Test-HasCodexOption -ArgumentList $argumentList -Names @('--sandbox'))) {
@@ -198,4 +185,4 @@ function codex-local {
 }
 
 Initialize-PSReadLineHistory
-Set-Alias -Name codex-llama -Value codex-local
+Set-Alias -Name codex-official -Value codex-local
