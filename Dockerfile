@@ -3,12 +3,13 @@ FROM ${LOCAL_CODEX_BASE_IMAGE}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=gpt-oss:20b
+ARG LOCAL_CODEX_LLAMACPP_PULL_MODELS=gpt-oss-20b
 ARG LOCAL_CODEX_RUNTIME_USER=codex
 ARG LOCAL_CODEX_RUNTIME_UID=1000
 ARG LOCAL_CODEX_RUNTIME_GID=1000
-ARG LOCAL_CODEX_OLLAMA_MODELS=/opt/local-codex-kit/ollama-models
-ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
+ARG LOCAL_CODEX_LLAMACPP_MODELS=/opt/local-codex-kit/llama-models
+ARG LLAMACPP_REPO_URL=https://github.com/ggml-org/llama.cpp.git
+ARG LLAMACPP_REPO_REF=master
 ARG NODE_LINUX_ARCHIVE_URL=https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz
 ARG HELM_RELEASE_API_URL=https://api.github.com/repos/helm/helm/releases/latest
 ARG ZARF_RELEASE_API_URL=https://api.github.com/repos/zarf-dev/zarf/releases/latest
@@ -22,6 +23,7 @@ RUN set -eux \
         build-essential \
         ca-certificates \
         clang \
+        cmake \
         curl \
         git \
         gnupg \
@@ -55,7 +57,14 @@ RUN set -eux \
 RUN set -eux \
     && curl -fsSL "${NODE_LINUX_ARCHIVE_URL}" | tar -xJ --strip-components=1 -C /usr/local \
     && npm install -g @openai/codex \
-    && curl -fsSL "${OLLAMA_LINUX_ARCHIVE_URL}" | tar --zstd -x -C /usr \
+    && git clone --depth 1 --branch "${LLAMACPP_REPO_REF}" "${LLAMACPP_REPO_URL}" /tmp/llama.cpp \
+    && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF \
+    && cmake --build /tmp/llama.cpp/build --config Release -j"$(nproc)" --target llama-server llama-cli llama-bench \
+    && install /tmp/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server \
+    && install /tmp/llama.cpp/build/bin/llama-cli /usr/local/bin/llama-cli \
+    && install /tmp/llama.cpp/build/bin/llama-bench /usr/local/bin/llama-bench \
+    && rm -rf /tmp/llama.cpp \
+    && python -m pip install --no-cache-dir 'huggingface_hub[cli]>=0.31.0' \
     && HELM_VERSION="$(curl -fsSL "${HELM_RELEASE_API_URL}" | jq -r '.tag_name')" \
     && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
     && tar -xzf /tmp/helm.tgz -C /tmp \
@@ -82,15 +91,15 @@ RUN set -eux \
     && node --version \
     && npm --version \
     && codex --version \
-    && ollama -v \
+    && llama-server --version \
+    && llama-cli --version \
     && pwsh --version
 
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
 ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
 ENV CODEX_HOME=/home/${LOCAL_CODEX_RUNTIME_USER}/.codex
-ENV LOCAL_CODEX_OLLAMA_MODELS=${LOCAL_CODEX_OLLAMA_MODELS}
-ENV OLLAMA_MODELS=${LOCAL_CODEX_OLLAMA_MODELS}
-ENV LOCAL_CODEX_OLLAMA_PULL_MODELS=${LOCAL_CODEX_OLLAMA_PULL_MODELS}
+ENV LOCAL_CODEX_LLAMACPP_MODELS=${LOCAL_CODEX_LLAMACPP_MODELS}
+ENV LOCAL_CODEX_LLAMACPP_PULL_MODELS=${LOCAL_CODEX_LLAMACPP_PULL_MODELS}
 
 COPY . .
 
@@ -99,13 +108,12 @@ RUN groupadd --gid "${LOCAL_CODEX_RUNTIME_GID}" "${LOCAL_CODEX_RUNTIME_USER}" \
     && install -d -m 0755 -o "${LOCAL_CODEX_RUNTIME_USER}" -g "${LOCAL_CODEX_RUNTIME_USER}" \
         /workspace \
         "${CODEX_HOME}" \
-        "${HOME}/.ollama" \
         "${HOME}/.config/powershell" \
-        "${LOCAL_CODEX_OLLAMA_MODELS}" \
+        "${LOCAL_CODEX_LLAMACPP_MODELS}" \
     && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
     && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code \
-    && HOME="${HOME}" OLLAMA_MODELS="${LOCAL_CODEX_OLLAMA_MODELS}" pwsh -NoLogo -NoProfile -File ./pull-ollama-models.ps1 -Models "${LOCAL_CODEX_OLLAMA_PULL_MODELS}" \
-    && chown -R "${LOCAL_CODEX_RUNTIME_USER}:${LOCAL_CODEX_RUNTIME_USER}" "${HOME}" /workspace "${LOCAL_CODEX_OLLAMA_MODELS}"
+    && HOME="${HOME}" LOCAL_CODEX_LLAMACPP_MODELS="${LOCAL_CODEX_LLAMACPP_MODELS}" pwsh -NoLogo -NoProfile -File ./pull-llama-models.ps1 -Models "${LOCAL_CODEX_LLAMACPP_PULL_MODELS}" \
+    && chown -R "${LOCAL_CODEX_RUNTIME_USER}:${LOCAL_CODEX_RUNTIME_USER}" "${HOME}" /workspace "${LOCAL_CODEX_LLAMACPP_MODELS}"
 
 USER ${LOCAL_CODEX_RUNTIME_USER}
 
