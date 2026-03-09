@@ -64,7 +64,7 @@ RUN set -eux \
     && install /tmp/llama.cpp/build/bin/llama-cli /usr/local/bin/llama-cli \
     && install /tmp/llama.cpp/build/bin/llama-bench /usr/local/bin/llama-bench \
     && rm -rf /tmp/llama.cpp \
-    && python -m pip install --no-cache-dir 'huggingface_hub[cli]>=0.31.0' \
+    && python -m pip install --no-cache-dir 'huggingface_hub[hf_xet]>=0.32.0' \
     && HELM_VERSION="$(curl -fsSL "${HELM_RELEASE_API_URL}" | jq -r '.tag_name')" \
     && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
     && tar -xzf /tmp/helm.tgz -C /tmp \

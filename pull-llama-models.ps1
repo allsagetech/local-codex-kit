@@ -39,7 +39,7 @@ foreach ($requestedModel in $requestedModels) {
     New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
 
     Write-Host ("Downloading llama.cpp model '{0}' from Hugging Face repo '{1}' with patterns: {2}" -f $alias, $repoId, ($includePatterns -join ', '))
-    $downloadArgs = @('-m', 'huggingface_hub', 'download', $repoId, '--local-dir', $targetDirectory)
+    $downloadArgs = @('-m', 'huggingface_hub.commands.hf_cli', 'download', $repoId, '--local-dir', $targetDirectory)
     foreach ($pattern in $includePatterns) {
         $downloadArgs += @('--include', $pattern)
     }

@@ -188,7 +188,8 @@ function Select-PrimaryGgufFile {
     )
 
     $ggufFiles = @(
-        Get-ChildItem -LiteralPath $ModelDirectory -Recurse -File -Filter '*.gguf' |
+        Get-ChildItem -LiteralPath $ModelDirectory -Recurse |
+        Where-Object { (-not $_.PSIsContainer) -and $_.Name.EndsWith('.gguf') } |
         Sort-Object -Property FullName
     )
 
