@@ -75,27 +75,6 @@ RUN set -eux \
     && chmod +x /usr/local/bin/zarf \
     && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium
 
-RUN set -eux \
-    && dpkg-query -W -f='${binary:Package} ${Version}\n' code \
-    && google-chrome-stable --version \
-    && chromium --version \
-    && git --version \
-    && go version \
-    && python --version \
-    && python -m pip --version \
-    && python -c "import transformers; print(transformers.__version__)" \
-    && helm version --short \
-    && zarf version \
-    && gcc --version \
-    && clang --version \
-    && nano --version \
-    && node --version \
-    && npm --version \
-    && codex --version \
-    && command -v transformers \
-    && command -v huggingface-cli \
-    && true
-
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
 ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
 ENV CODEX_HOME=/home/${LOCAL_CODEX_RUNTIME_USER}/.codex
