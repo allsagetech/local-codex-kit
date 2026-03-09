@@ -146,6 +146,14 @@ $env:LOCAL_CODEX_LLAMACPP_GGUF_INCLUDE='gpt-oss-20b-Q8_0.gguf'
 docker compose build local-codex-kit
 ```
 
+If the download step needs authentication or your connection is slow, set these before the build:
+
+```powershell
+$env:HF_TOKEN='hf_...'
+$env:HF_HUB_DOWNLOAD_TIMEOUT='300'
+docker compose build local-codex-kit
+```
+
 Set `LOCAL_CODEX_LLAMACPP_PULL_MODELS=none` to skip build-time downloads entirely.
 
 At runtime, `llama-server` reads models from the image-baked model store at `/opt/local-codex-kit/llama-models`. To change the available model set, rebuild the image.

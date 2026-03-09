@@ -7,9 +7,16 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path (Split-Path -Parent $PSCommandPath) 'llama-models.ps1')
 
 $env:LOCAL_CODEX_LLAMACPP_MODELS = if ($env:LOCAL_CODEX_LLAMACPP_MODELS) { $env:LOCAL_CODEX_LLAMACPP_MODELS } else { '/opt/local-codex-kit/llama-models' }
+$env:HF_HUB_DOWNLOAD_TIMEOUT = if ($env:HF_HUB_DOWNLOAD_TIMEOUT) { $env:HF_HUB_DOWNLOAD_TIMEOUT } else { '120' }
+$env:HF_XET_HIGH_PERFORMANCE = if ($env:HF_XET_HIGH_PERFORMANCE) { $env:HF_XET_HIGH_PERFORMANCE } else { '1' }
 
 if (-not (Test-Path -LiteralPath $env:LOCAL_CODEX_LLAMACPP_MODELS)) {
     New-Item -ItemType Directory -Path $env:LOCAL_CODEX_LLAMACPP_MODELS -Force | Out-Null
+}
+
+$hfCli = Get-Command hf -ErrorAction SilentlyContinue
+if (-not $hfCli) {
+    throw 'The Hugging Face CLI (`hf`) is not installed in this image.'
 }
 
 $requestedModels = @(Get-ModelList -RawModels $Models)
@@ -39,12 +46,15 @@ foreach ($requestedModel in $requestedModels) {
     New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
 
     Write-Host ("Downloading llama.cpp model '{0}' from Hugging Face repo '{1}' with patterns: {2}" -f $alias, $repoId, ($includePatterns -join ', '))
-    $downloadArgs = @('-m', 'huggingface_hub.commands.hf_cli', 'download', $repoId, '--local-dir', $targetDirectory)
+    $downloadArgs = @('download', $repoId, '--local-dir', $targetDirectory)
     foreach ($pattern in $includePatterns) {
         $downloadArgs += @('--include', $pattern)
     }
+    if ($env:HF_TOKEN) {
+        $downloadArgs += @('--token', $env:HF_TOKEN)
+    }
 
-    & python @downloadArgs
+    & $hfCli.Source @downloadArgs
     if ($LASTEXITCODE -ne 0) {
         throw ("huggingface_hub download failed for repo '{0}' with include patterns '{1}'." -f $repoId, ($includePatterns -join ', '))
     }
