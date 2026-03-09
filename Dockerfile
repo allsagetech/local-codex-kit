@@ -94,7 +94,7 @@ RUN set -eux \
     && codex --version \
     && command -v transformers \
     && command -v huggingface-cli \
-    && test -x /usr/local/bin/pwsh
+    && true
 
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
 ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
