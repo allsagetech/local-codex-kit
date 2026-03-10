@@ -16,13 +16,13 @@ if (-not (Test-Path -LiteralPath $resolvedSource -PathType Container)) {
 }
 
 $repoRoot = Split-Path -Parent $PSCommandPath
-$containerName = 'local-codex-kit-workspace-import'
+$containerName = 'local-ollama-kit-workspace-import'
 $dockerCpSource = Join-Path $resolvedSource '.'
 $escapedDestination = $Destination.Replace("'", "''")
 
 & docker rm -f $containerName 2>$null | Out-Null
 
-& docker compose -f (Join-Path $repoRoot 'docker-compose.yml') run -d --name $containerName --no-deps --entrypoint pwsh local-codex-kit -NoLogo -NoProfile -Command "Start-Sleep -Seconds 600" | Out-Null
+& docker compose -f (Join-Path $repoRoot 'docker-compose.yml') run -d --name $containerName --no-deps --entrypoint pwsh local-ollama-kit -NoLogo -NoProfile -Command "Start-Sleep -Seconds 600" | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to start the temporary import container.'
 }

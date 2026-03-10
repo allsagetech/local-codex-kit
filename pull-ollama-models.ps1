@@ -1,5 +1,5 @@
 param(
-    [string]$Models = $env:LOCAL_CODEX_OLLAMA_PULL_MODELS,
+    [string]$Models = $env:LOCAL_OLLAMA_PULL_MODELS,
     [int]$Port = 11434,
     [int]$StartupTimeoutSec = 180
 )
@@ -45,27 +45,6 @@ function Wait-ForOllama {
     throw "Ollama did not become ready at $BaseUrl within $TimeoutSec seconds."
 }
 
-function Convert-ToCodexModelName {
-    param(
-        [string]$ModelName
-    )
-
-    if ([string]::IsNullOrWhiteSpace($ModelName)) {
-        return ''
-    }
-
-    $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "gpt-oss-$($Matches[1])"
-    }
-
-    if ($resolvedModel -match '^gpt-oss:(.+)$') {
-        return "gpt-oss-$($Matches[1])"
-    }
-
-    return $resolvedModel
-}
-
 $resolvedModels = Get-ModelList -RawModels $Models
 if ($resolvedModels.Count -eq 0) {
     Write-Host 'No Ollama models requested for build-time pull.'
@@ -80,13 +59,13 @@ if (-not $ollama) {
 $hostAddress = "127.0.0.1:$Port"
 $baseUrl = "http://$hostAddress"
 $env:OLLAMA_HOST = $hostAddress
-$env:OLLAMA_MODELS = if ($env:LOCAL_CODEX_OLLAMA_MODELS) { $env:LOCAL_CODEX_OLLAMA_MODELS } elseif ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { '/opt/local-codex-kit/ollama-models' }
+$env:OLLAMA_MODELS = if ($env:LOCAL_OLLAMA_MODELS) { $env:LOCAL_OLLAMA_MODELS } elseif ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { '/opt/local-ollama-kit/ollama-models' }
 
 if (-not (Test-Path -LiteralPath $env:OLLAMA_MODELS)) {
     New-Item -ItemType Directory -Path $env:OLLAMA_MODELS -Force | Out-Null
 }
 
-$logDir = '/tmp/local-codex-kit-build'
+$logDir = '/tmp/local-ollama-kit-build'
 if (-not (Test-Path -LiteralPath $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }
@@ -103,15 +82,6 @@ try {
         & $ollama.Source pull $model
         if ($LASTEXITCODE -ne 0) {
             throw ("ollama pull failed for model '{0}' with exit code {1}." -f $model, $LASTEXITCODE)
-        }
-
-        $codexModel = Convert-ToCodexModelName -ModelName $model
-        if (($codexModel) -and ($codexModel -ne $model)) {
-            Write-Host ("Creating Ollama alias for Codex metadata: {0} -> {1}" -f $codexModel, $model)
-            & $ollama.Source cp $model $codexModel
-            if ($LASTEXITCODE -ne 0) {
-                throw ("ollama cp failed for alias '{0}' from source '{1}' with exit code {2}." -f $codexModel, $model, $LASTEXITCODE)
-            }
         }
     }
 } finally {

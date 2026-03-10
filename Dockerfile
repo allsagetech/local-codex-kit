@@ -1,19 +1,19 @@
-ARG LOCAL_CODEX_BASE_IMAGE=ubuntu:22.04
-FROM ${LOCAL_CODEX_BASE_IMAGE}
+ARG LOCAL_OLLAMA_BASE_IMAGE=ubuntu:22.04
+FROM ${LOCAL_OLLAMA_BASE_IMAGE}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG LOCAL_CODEX_OLLAMA_PULL_MODELS=gpt-oss:20b
-ARG LOCAL_CODEX_RUNTIME_USER=codex
-ARG LOCAL_CODEX_RUNTIME_UID=1000
-ARG LOCAL_CODEX_RUNTIME_GID=1000
-ARG LOCAL_CODEX_OLLAMA_MODELS=/opt/local-codex-kit/ollama-models
+ARG LOCAL_OLLAMA_PULL_MODELS=gpt-oss:20b
+ARG LOCAL_OLLAMA_RUNTIME_USER=ollama
+ARG LOCAL_OLLAMA_RUNTIME_UID=1000
+ARG LOCAL_OLLAMA_RUNTIME_GID=1000
+ARG LOCAL_OLLAMA_MODELS=/opt/local-ollama-kit/ollama-models
 ARG OLLAMA_LINUX_ARCHIVE_URL=https://ollama.com/download/ollama-linux-amd64.tar.zst
 ARG NODE_LINUX_ARCHIVE_URL=https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz
 ARG HELM_RELEASE_API_URL=https://api.github.com/repos/helm/helm/releases/latest
 ARG ZARF_RELEASE_API_URL=https://api.github.com/repos/zarf-dev/zarf/releases/latest
 
-WORKDIR /opt/local-codex-kit
+WORKDIR /opt/local-ollama-kit
 
 RUN set -eux \
     && apt-get update \
@@ -54,7 +54,6 @@ RUN set -eux \
 
 RUN set -eux \
     && curl -fsSL "${NODE_LINUX_ARCHIVE_URL}" | tar -xJ --strip-components=1 -C /usr/local \
-    && npm install -g @openai/codex \
     && curl -fsSL "${OLLAMA_LINUX_ARCHIVE_URL}" | tar --zstd -x -C /usr \
     && HELM_VERSION="$(curl -fsSL "${HELM_RELEASE_API_URL}" | jq -r '.tag_name')" \
     && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
@@ -81,32 +80,29 @@ RUN set -eux \
     && nano --version \
     && node --version \
     && npm --version \
-    && codex --version \
     && ollama -v \
     && pwsh --version
 
-ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
-ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
-ENV CODEX_HOME=/home/${LOCAL_CODEX_RUNTIME_USER}/.codex
-ENV LOCAL_CODEX_OLLAMA_MODELS=${LOCAL_CODEX_OLLAMA_MODELS}
-ENV OLLAMA_MODELS=${LOCAL_CODEX_OLLAMA_MODELS}
-ENV LOCAL_CODEX_OLLAMA_PULL_MODELS=${LOCAL_CODEX_OLLAMA_PULL_MODELS}
+ENV LOCAL_OLLAMA_RUNTIME_USER=${LOCAL_OLLAMA_RUNTIME_USER}
+ENV HOME=/home/${LOCAL_OLLAMA_RUNTIME_USER}
+ENV LOCAL_OLLAMA_MODELS=${LOCAL_OLLAMA_MODELS}
+ENV OLLAMA_MODELS=${LOCAL_OLLAMA_MODELS}
+ENV LOCAL_OLLAMA_PULL_MODELS=${LOCAL_OLLAMA_PULL_MODELS}
 
 COPY . .
 
-RUN groupadd --gid "${LOCAL_CODEX_RUNTIME_GID}" "${LOCAL_CODEX_RUNTIME_USER}" \
-    && useradd --uid "${LOCAL_CODEX_RUNTIME_UID}" --gid "${LOCAL_CODEX_RUNTIME_GID}" --create-home --shell /bin/bash "${LOCAL_CODEX_RUNTIME_USER}" \
-    && install -d -m 0755 -o "${LOCAL_CODEX_RUNTIME_USER}" -g "${LOCAL_CODEX_RUNTIME_USER}" \
+RUN groupadd --gid "${LOCAL_OLLAMA_RUNTIME_GID}" "${LOCAL_OLLAMA_RUNTIME_USER}" \
+    && useradd --uid "${LOCAL_OLLAMA_RUNTIME_UID}" --gid "${LOCAL_OLLAMA_RUNTIME_GID}" --create-home --shell /bin/bash "${LOCAL_OLLAMA_RUNTIME_USER}" \
+    && install -d -m 0755 -o "${LOCAL_OLLAMA_RUNTIME_USER}" -g "${LOCAL_OLLAMA_RUNTIME_USER}" \
         /workspace \
-        "${CODEX_HOME}" \
         "${HOME}/.ollama" \
         "${HOME}/.config/powershell" \
-        "${LOCAL_CODEX_OLLAMA_MODELS}" \
-    && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
-    && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code \
-    && HOME="${HOME}" OLLAMA_MODELS="${LOCAL_CODEX_OLLAMA_MODELS}" pwsh -NoLogo -NoProfile -File ./pull-ollama-models.ps1 -Models "${LOCAL_CODEX_OLLAMA_PULL_MODELS}" \
-    && chown -R "${LOCAL_CODEX_RUNTIME_USER}:${LOCAL_CODEX_RUNTIME_USER}" "${HOME}" /workspace "${LOCAL_CODEX_OLLAMA_MODELS}"
+        "${LOCAL_OLLAMA_MODELS}" \
+    && cp /opt/local-ollama-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
+    && install -m 0755 /opt/local-ollama-kit/docker-code-wrapper.sh /usr/local/bin/code \
+    && HOME="${HOME}" OLLAMA_MODELS="${LOCAL_OLLAMA_MODELS}" pwsh -NoLogo -NoProfile -File ./pull-ollama-models.ps1 -Models "${LOCAL_OLLAMA_PULL_MODELS}" \
+    && chown -R "${LOCAL_OLLAMA_RUNTIME_USER}:${LOCAL_OLLAMA_RUNTIME_USER}" "${HOME}" /workspace "${LOCAL_OLLAMA_MODELS}"
 
-USER ${LOCAL_CODEX_RUNTIME_USER}
+USER ${LOCAL_OLLAMA_RUNTIME_USER}
 
-ENTRYPOINT ["pwsh", "-NoLogo", "-NoProfile", "-File", "/opt/local-codex-kit/docker-entrypoint.ps1"]
+ENTRYPOINT ["pwsh", "-NoLogo", "-NoProfile", "-File", "/opt/local-ollama-kit/docker-entrypoint.ps1"]

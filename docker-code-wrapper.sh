@@ -28,8 +28,8 @@ if [[ "$(id -u)" == "0" ]]; then
     done
 
     if [[ "$needs_root_flags" == "1" ]]; then
-        mkdir -p /tmp/local-codex-kit-vscode-root
-        extra_args+=(--no-sandbox --user-data-dir /tmp/local-codex-kit-vscode-root)
+        mkdir -p /tmp/local-ollama-kit-vscode-root
+        extra_args+=(--no-sandbox --user-data-dir /tmp/local-ollama-kit-vscode-root)
     fi
 fi
 

@@ -41,218 +41,33 @@ function Convert-ToOllamaModelName {
     return $resolvedModel
 }
 
-function Convert-ToCodexModelName {
-    param(
-        [string]$ModelName
-    )
+$env:LOCAL_OLLAMA_KIT_ROOT = if ($env:LOCAL_OLLAMA_KIT_ROOT) { $env:LOCAL_OLLAMA_KIT_ROOT } else { '/opt/local-ollama-kit' }
+$env:HOME = if ($env:HOME) { $env:HOME } else { '/home/ollama' }
+$env:LOCAL_OLLAMA_WORKSPACE = if ($env:LOCAL_OLLAMA_WORKSPACE) { $env:LOCAL_OLLAMA_WORKSPACE } else { '/workspace' }
+$env:LOCAL_OLLAMA_PULL_MODELS = if ($env:LOCAL_OLLAMA_PULL_MODELS) { $env:LOCAL_OLLAMA_PULL_MODELS } else { '' }
+$env:LOCAL_OLLAMA_MODELS = if ($env:LOCAL_OLLAMA_MODELS) { $env:LOCAL_OLLAMA_MODELS } else { '/opt/local-ollama-kit/ollama-models' }
+$env:LOCAL_OLLAMA_PORT = if ($env:LOCAL_OLLAMA_PORT) { $env:LOCAL_OLLAMA_PORT } else { '11434' }
+$env:LOCAL_OLLAMA_REQUIRE_READY = if ($env:LOCAL_OLLAMA_REQUIRE_READY) { $env:LOCAL_OLLAMA_REQUIRE_READY } else { '0' }
+$env:LOCAL_OLLAMA_CONTEXT_LENGTH = if ($env:LOCAL_OLLAMA_CONTEXT_LENGTH) { $env:LOCAL_OLLAMA_CONTEXT_LENGTH } else { '65536' }
+$env:OLLAMA_MODELS = $env:LOCAL_OLLAMA_MODELS
 
-    if ([string]::IsNullOrWhiteSpace($ModelName)) {
-        return ''
-    }
-
-    $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "gpt-oss-$($Matches[1])"
-    }
-
-    if ($resolvedModel -match '^gpt-oss:(.+)$') {
-        return "gpt-oss-$($Matches[1])"
-    }
-
-    return $resolvedModel
-}
-
-function Convert-ToTomlString {
-    param(
-        [string]$Value
-    )
-
-    if ($null -eq $Value) {
-        return '""'
-    }
-
-    $escaped = $Value.Replace('\', '\\').Replace('"', '\"')
-    return '"' + $escaped + '"'
-}
-
-function Get-ModelList {
-    param(
-        [string]$RawModels
-    )
-
-    if ([string]::IsNullOrWhiteSpace($RawModels)) {
-        return @()
-    }
-
-    return @(
-        $RawModels.Split(',') |
-        ForEach-Object { $_.Trim() } |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    )
-}
-
-function Get-InstalledOllamaModels {
-    $models = @()
-
-    $lines = @(& ollama list 2>$null)
-    foreach ($line in @($lines | Select-Object -Skip 1)) {
-        $trimmed = $line.Trim()
-        if ([string]::IsNullOrWhiteSpace($trimmed)) {
-            continue
-        }
-
-        $models += (($trimmed -split '\s+')[0]).Trim()
-    }
-
-    return @($models)
-}
-
-function Get-OllamaAliasMappings {
-    param(
-        [string[]]$ModelNames
-    )
-
-    $seenAliases = @{}
-    $mappings = @()
-
-    foreach ($modelName in @($ModelNames)) {
-        if ([string]::IsNullOrWhiteSpace($modelName)) {
-            continue
-        }
-
-        $sourceModel = Convert-ToOllamaModelName -ModelName $modelName
-        $aliasModel = Convert-ToCodexModelName -ModelName $modelName
-        if (
-            [string]::IsNullOrWhiteSpace($sourceModel) -or
-            [string]::IsNullOrWhiteSpace($aliasModel) -or
-            ($sourceModel -eq $aliasModel) -or
-            $seenAliases.ContainsKey($aliasModel)
-        ) {
-            continue
-        }
-
-        $seenAliases[$aliasModel] = $true
-        $mappings += [pscustomobject]@{
-            sourceModel = $sourceModel
-            aliasModel = $aliasModel
-        }
-    }
-
-    return @($mappings)
-}
-
-function Ensure-OllamaModelAliases {
-    param(
-        [string[]]$ModelNames
-    )
-
-    $mappings = Get-OllamaAliasMappings -ModelNames $ModelNames
-    if ($mappings.Count -eq 0) {
-        return
-    }
-
-    $installedModels = @{}
-    foreach ($installedModel in @(Get-InstalledOllamaModels)) {
-        $installedModels[$installedModel] = $true
-    }
-
-    foreach ($mapping in @($mappings)) {
-        if ($installedModels.ContainsKey($mapping.aliasModel)) {
-            continue
-        }
-        if (-not $installedModels.ContainsKey($mapping.sourceModel)) {
-            continue
-        }
-
-        Write-Host ("- Creating Ollama alias for Codex metadata: {0} -> {1}" -f $mapping.aliasModel, $mapping.sourceModel)
-        & ollama cp $mapping.sourceModel $mapping.aliasModel | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw ("ollama cp failed for alias '{0}' from source '{1}'." -f $mapping.aliasModel, $mapping.sourceModel)
-        }
-
-        $installedModels[$mapping.aliasModel] = $true
-    }
-}
-
-function Initialize-CodexConfig {
-    param(
-        [string]$CodexHome,
-        [string]$OssBaseUrl,
-        [string]$DefaultModel,
-        [string]$ApprovalPolicy,
-        [string]$SandboxMode
-    )
-
-    if (-not (Test-Path -LiteralPath $CodexHome)) {
-        New-Item -ItemType Directory -Path $CodexHome -Force | Out-Null
-    }
-
-    $configPath = Join-Path $CodexHome 'config.toml'
-    $managedHeader = '# Managed by local-codex-kit. Remove this line to stop auto-refresh.'
-    $configContent = @(
-        $managedHeader
-        'model_provider = "oss"'
-        'model = ' + (Convert-ToTomlString -Value $DefaultModel)
-        'approval_policy = ' + (Convert-ToTomlString -Value $ApprovalPolicy)
-        'sandbox_mode = ' + (Convert-ToTomlString -Value $SandboxMode)
-        ''
-        '[model_providers.oss]'
-        'name = "Open Source"'
-        'base_url = ' + (Convert-ToTomlString -Value $OssBaseUrl)
-        ''
-    ) -join "`n"
-
-    $shouldWrite = $true
-    if (Test-Path -LiteralPath $configPath) {
-        $firstLine = Get-Content -LiteralPath $configPath -TotalCount 1 -ErrorAction SilentlyContinue
-        $shouldWrite = ($firstLine -eq $managedHeader)
-    }
-
-    if ($shouldWrite) {
-        Set-Content -LiteralPath $configPath -Value $configContent -NoNewline
-    }
-}
-
-$env:LOCAL_CODEX_KIT_ROOT = if ($env:LOCAL_CODEX_KIT_ROOT) { $env:LOCAL_CODEX_KIT_ROOT } else { '/opt/local-codex-kit' }
-$env:HOME = if ($env:HOME) { $env:HOME } else { '/home/codex' }
-$env:LOCAL_CODEX_WORKSPACE = if ($env:LOCAL_CODEX_WORKSPACE) { $env:LOCAL_CODEX_WORKSPACE } else { '/workspace' }
-$env:LOCAL_CODEX_OLLAMA_PULL_MODELS = if ($env:LOCAL_CODEX_OLLAMA_PULL_MODELS) { $env:LOCAL_CODEX_OLLAMA_PULL_MODELS } else { '' }
-$env:LOCAL_CODEX_OLLAMA_MODELS = if ($env:LOCAL_CODEX_OLLAMA_MODELS) { $env:LOCAL_CODEX_OLLAMA_MODELS } else { '/opt/local-codex-kit/ollama-models' }
-$env:LOCAL_CODEX_OLLAMA_PORT = if ($env:LOCAL_CODEX_OLLAMA_PORT) { $env:LOCAL_CODEX_OLLAMA_PORT } else { '11434' }
-$env:LOCAL_CODEX_OLLAMA_REQUIRE_READY = if ($env:LOCAL_CODEX_OLLAMA_REQUIRE_READY) { $env:LOCAL_CODEX_OLLAMA_REQUIRE_READY } else { '0' }
-$env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH = if ($env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH) { $env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH } else { '65536' }
-$env:CODEX_HOME = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { '/home/codex/.codex' }
-$env:LOCAL_CODEX_CODEX_APPROVAL_POLICY = if ($env:LOCAL_CODEX_CODEX_APPROVAL_POLICY) { $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY } else { 'on-request' }
-$env:LOCAL_CODEX_CODEX_SANDBOX_MODE = if ($env:LOCAL_CODEX_CODEX_SANDBOX_MODE) { $env:LOCAL_CODEX_CODEX_SANDBOX_MODE } else { 'danger-full-access' }
-$env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) { $env:LOCAL_CODEX_CODEX_MODEL } else { '' }
-$env:OLLAMA_MODELS = $env:LOCAL_CODEX_OLLAMA_MODELS
-
-$defaultOllamaModel = Get-FirstConfiguredOllamaModel -RawModels $env:LOCAL_CODEX_OLLAMA_PULL_MODELS
-$requestedModel = if ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
-    $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
+$defaultOllamaModel = Get-FirstConfiguredOllamaModel -RawModels $env:LOCAL_OLLAMA_PULL_MODELS
+$requestedModel = if ($env:LOCAL_OLLAMA_MODEL_ALIAS) {
+    $env:LOCAL_OLLAMA_MODEL_ALIAS
 } elseif ($defaultOllamaModel) {
     $defaultOllamaModel
 } else {
     ''
 }
 
-$env:LOCAL_CODEX_OLLAMA_ENABLE = if ($env:LOCAL_CODEX_OLLAMA_ENABLE) { $env:LOCAL_CODEX_OLLAMA_ENABLE } else { '1' }
-$env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS = if ($requestedModel) {
+$env:LOCAL_OLLAMA_ENABLE = if ($env:LOCAL_OLLAMA_ENABLE) { $env:LOCAL_OLLAMA_ENABLE } else { '1' }
+$env:LOCAL_OLLAMA_MODEL_ALIAS = if ($requestedModel) {
     Convert-ToOllamaModelName -ModelName $requestedModel
 } else {
     ''
 }
-$env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) {
-    Convert-ToOllamaModelName -ModelName $env:LOCAL_CODEX_CODEX_MODEL
-} elseif ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
-    Convert-ToOllamaModelName -ModelName $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS
-} elseif ($defaultOllamaModel) {
-    Convert-ToOllamaModelName -ModelName $defaultOllamaModel
-} else {
-    'gpt-oss:20b'
-}
 
-$workspace = $env:LOCAL_CODEX_WORKSPACE
+$workspace = $env:LOCAL_OLLAMA_WORKSPACE
 if (-not (Test-Path -LiteralPath $workspace)) {
     New-Item -ItemType Directory -Path $workspace -Force | Out-Null
 }
@@ -261,8 +76,8 @@ Set-Location $workspace
 
 $ollamaInfo = $null
 $ollamaStartupError = $null
-if ($env:LOCAL_CODEX_OLLAMA_ENABLE -ne '0') {
-    $ollamaStarterScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'start-ollama.ps1'
+if ($env:LOCAL_OLLAMA_ENABLE -ne '0') {
+    $ollamaStarterScript = Join-Path $env:LOCAL_OLLAMA_KIT_ROOT 'start-ollama.ps1'
     if (-not (Test-Path -LiteralPath $ollamaStarterScript)) {
         throw "Ollama starter script not found: $ollamaStarterScript"
     }
@@ -271,9 +86,9 @@ if ($env:LOCAL_CODEX_OLLAMA_ENABLE -ne '0') {
         $ollamaInfo = & $ollamaStarterScript
     } catch {
         $ollamaStartupError = $_.Exception.Message
-        $env:LOCAL_CODEX_OLLAMA_ENABLE = '0'
+        $env:LOCAL_OLLAMA_ENABLE = '0'
 
-        if ($env:LOCAL_CODEX_OLLAMA_REQUIRE_READY -eq '1') {
+        if ($env:LOCAL_OLLAMA_REQUIRE_READY -eq '1') {
             throw
         }
 
@@ -282,44 +97,35 @@ if ($env:LOCAL_CODEX_OLLAMA_ENABLE -ne '0') {
     }
 }
 
-$ollamaHost = if ($env:LOCAL_CODEX_OLLAMA_HOST) { $env:LOCAL_CODEX_OLLAMA_HOST } else { '127.0.0.1' }
-$env:LOCAL_CODEX_OLLAMA_BASE_URL = if ($ollamaInfo) {
+$ollamaHost = if ($env:LOCAL_OLLAMA_HOST) { $env:LOCAL_OLLAMA_HOST } else { '127.0.0.1' }
+$env:LOCAL_OLLAMA_BASE_URL = if ($ollamaInfo) {
     $ollamaInfo.ollamaBaseUrl
 } else {
-    "http://$ollamaHost`:$($env:LOCAL_CODEX_OLLAMA_PORT)"
+    "http://$ollamaHost`:$($env:LOCAL_OLLAMA_PORT)"
 }
-$env:CODEX_OSS_BASE_URL = $env:LOCAL_CODEX_OLLAMA_BASE_URL.TrimEnd('/') + '/v1'
 
-Initialize-CodexConfig `
-    -CodexHome $env:CODEX_HOME `
-    -OssBaseUrl $env:CODEX_OSS_BASE_URL `
-    -DefaultModel $env:LOCAL_CODEX_CODEX_MODEL `
-    -ApprovalPolicy $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY `
-    -SandboxMode $env:LOCAL_CODEX_CODEX_SANDBOX_MODE
-
-$profileScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'docker-profile.ps1'
+$profileScript = Join-Path $env:LOCAL_OLLAMA_KIT_ROOT 'docker-profile.ps1'
 if (Test-Path -LiteralPath $profileScript) {
     . $profileScript
 }
 
 Write-Host ''
 Write-Host 'Local Ollama container'
-Write-Host ("- Repo: {0}" -f $env:LOCAL_CODEX_KIT_ROOT)
+Write-Host ("- Repo: {0}" -f $env:LOCAL_OLLAMA_KIT_ROOT)
 Write-Host ("- Working directory: {0}" -f (Get-Location).Path)
 Write-Host ("- Network mode: {0}" -f 'offline (set by docker compose)')
-Write-Host ("- Runtime user: {0}" -f $(if ($env:LOCAL_CODEX_RUNTIME_USER) { $env:LOCAL_CODEX_RUNTIME_USER } else { 'codex' }))
-Write-Host ("- Codex home: {0}" -f $env:CODEX_HOME)
-Write-Host ("- Workspace storage: {0}" -f 'Docker-managed volume mounted at /workspace')
-if ($env:LOCAL_CODEX_OLLAMA_PULL_MODELS -and ($env:LOCAL_CODEX_OLLAMA_PULL_MODELS -ne 'none')) {
-    Write-Host ("- Build-pulled Ollama models: {0}" -f $env:LOCAL_CODEX_OLLAMA_PULL_MODELS)
+Write-Host ("- Runtime user: {0}" -f $(if ($env:LOCAL_OLLAMA_RUNTIME_USER) { $env:LOCAL_OLLAMA_RUNTIME_USER } else { 'ollama' }))
+Write-Host ("- Workspace storage: {0}" -f 'Docker-managed volume at /workspace plus bind mount at /workspace/project')
+if ($env:LOCAL_OLLAMA_PULL_MODELS -and ($env:LOCAL_OLLAMA_PULL_MODELS -ne 'none')) {
+    Write-Host ("- Build-pulled Ollama models: {0}" -f $env:LOCAL_OLLAMA_PULL_MODELS)
 }
-Write-Host ("- Ollama mode: {0}" -f $(if ($env:LOCAL_CODEX_OLLAMA_ENABLE -ne '0') { 'enabled' } else { 'disabled' }))
-Write-Host ("- Ollama model store: {0}" -f $env:LOCAL_CODEX_OLLAMA_MODELS)
+Write-Host ("- Ollama mode: {0}" -f $(if ($env:LOCAL_OLLAMA_ENABLE -ne '0') { 'enabled' } else { 'disabled' }))
+Write-Host ("- Ollama model store: {0}" -f $env:LOCAL_OLLAMA_MODELS)
 if ($ollamaInfo) {
     Write-Host ("- Ollama endpoint: {0}" -f $ollamaInfo.ollamaBaseUrl)
-    Write-Host ("- Ollama context length: {0}" -f $env:LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH)
-    if ($env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS) {
-        Write-Host ("- Default Ollama model: {0}" -f $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS)
+    Write-Host ("- Ollama context length: {0}" -f $env:LOCAL_OLLAMA_CONTEXT_LENGTH)
+    if ($env:LOCAL_OLLAMA_MODEL_ALIAS) {
+        Write-Host ("- Default Ollama model: {0}" -f $env:LOCAL_OLLAMA_MODEL_ALIAS)
     }
     if ($ollamaInfo.started -and $ollamaInfo.processId) {
         Write-Host ("- Ollama PID: {0}" -f $ollamaInfo.processId)
@@ -327,14 +133,10 @@ if ($ollamaInfo) {
 } elseif ($ollamaStartupError) {
     Write-Host '- Ollama startup: failed; shell fallback enabled'
 }
-Write-Host ("- Codex OSS endpoint: {0}" -f $env:CODEX_OSS_BASE_URL)
-Write-Host ("- Codex default model: {0}" -f $env:LOCAL_CODEX_CODEX_MODEL)
-Write-Host ("- Codex sandbox: {0}" -f $env:LOCAL_CODEX_CODEX_SANDBOX_MODE)
-Write-Host ("- Codex approvals: {0}" -f $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY)
 Write-Host '- Container hardening: non-root user, read-only root filesystem, tmpfs-backed /tmp, no-new-privileges, all Linux capabilities dropped.'
 Write-Host '- Linux-native tools: code, chromium, git, go, python, helm, zarf, node, gcc/clang.'
 Write-Host '- Windows-only tools such as Notepad++ and VS Build Tools are not available in this Ubuntu image.'
-Write-Host '- The workspace and runtime state stay in Docker-managed volumes; no host workspace is bind-mounted into the container.'
+Write-Host '- The workspace and runtime state stay in Docker-managed volumes except for the optional host bind mount at /workspace/project.'
 Write-Host '- The Ollama model store is baked into the image and selected at build time.'
 Write-Host '- `code .` inside this headless container will not launch Windows VS Code.'
 Write-Host ''
@@ -347,6 +149,6 @@ if ($Command -and $Command.Count -gt 0) {
 }
 
 Write-Host 'Starting interactive PowerShell session...'
-Write-Host '- Container defaults: use `codex-local`, `codex --oss`, or `ollama run <model>`.'
+Write-Host '- Container defaults: use `ollama-local` or `ollama run <model>`.'
 pwsh -NoLogo
 exit $LASTEXITCODE

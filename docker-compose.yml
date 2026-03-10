@@ -1,11 +1,13 @@
+name: local-ollama-kit
+
 services:
-  local-codex-kit:
+  local-ollama-kit:
     build:
       context: .
       args:
-        LOCAL_CODEX_BASE_IMAGE: ${LOCAL_CODEX_BASE_IMAGE:-ubuntu:22.04}
-        LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
-    image: allsagetech/local-codex-kit:latest
+        LOCAL_OLLAMA_BASE_IMAGE: ${LOCAL_OLLAMA_BASE_IMAGE:-ubuntu:22.04}
+        LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+    image: allsagetech/local-ollama-kit:latest
     network_mode: "none"
     init: true
     stdin_open: true
@@ -22,28 +24,23 @@ services:
       - /tmp:exec,mode=1777
       - /run:mode=755
     environment:
-      HOME: /home/codex
-      CODEX_HOME: /home/codex/.codex
-      LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_OLLAMA_MODELS: /opt/local-codex-kit/ollama-models
-      LOCAL_CODEX_OLLAMA_PULL_MODELS: ${LOCAL_CODEX_OLLAMA_PULL_MODELS:-gpt-oss:20b}
-      LOCAL_CODEX_OLLAMA_ENABLE: ${LOCAL_CODEX_OLLAMA_ENABLE:-1}
-      LOCAL_CODEX_OLLAMA_PORT: ${LOCAL_CODEX_OLLAMA_PORT:-11434}
-      LOCAL_CODEX_OLLAMA_MODEL_ALIAS: ${LOCAL_CODEX_OLLAMA_MODEL_ALIAS:-}
-      LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH: ${LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH:-65536}
-      LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC:-300}
-      LOCAL_CODEX_OLLAMA_REQUIRE_READY: ${LOCAL_CODEX_OLLAMA_REQUIRE_READY:-0}
-      LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
-      LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
+      HOME: /home/ollama
+      LOCAL_OLLAMA_WORKSPACE: /workspace
+      LOCAL_OLLAMA_MODELS: /opt/local-ollama-kit/ollama-models
+      LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+      LOCAL_OLLAMA_ENABLE: ${LOCAL_OLLAMA_ENABLE:-1}
+      LOCAL_OLLAMA_PORT: ${LOCAL_OLLAMA_PORT:-11434}
+      LOCAL_OLLAMA_MODEL_ALIAS: ${LOCAL_OLLAMA_MODEL_ALIAS:-}
+      LOCAL_OLLAMA_CONTEXT_LENGTH: ${LOCAL_OLLAMA_CONTEXT_LENGTH:-65536}
+      LOCAL_OLLAMA_STARTUP_TIMEOUT_SEC: ${LOCAL_OLLAMA_STARTUP_TIMEOUT_SEC:-300}
+      LOCAL_OLLAMA_REQUIRE_READY: ${LOCAL_OLLAMA_REQUIRE_READY:-0}
     volumes:
-      - local-codex-kit-workspace:/workspace
-      - local-codex-kit-ollama-home:/home/codex/.ollama
-      - local-codex-kit-codex-home:/home/codex/.codex
+      - local-ollama-kit-workspace:/workspace
+      - local-ollama-kit-home:/home/ollama/.ollama
       - type: bind
-        source: ${LOCAL_CODEX_HOST_PROJECT_PATH:-./host-project}
+        source: ${LOCAL_OLLAMA_HOST_PROJECT_PATH:-./host-project}
         target: /workspace/project
 
 volumes:
-  local-codex-kit-workspace:
-  local-codex-kit-ollama-home:
-  local-codex-kit-codex-home:
+  local-ollama-kit-workspace:
+  local-ollama-kit-home:

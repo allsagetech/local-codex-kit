@@ -1,7 +1,7 @@
 param(
-    [string]$BindHost = $(if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_OLLAMA_HOST)) { '127.0.0.1' } else { $env:LOCAL_CODEX_OLLAMA_HOST }),
+    [string]$BindHost = $(if ([string]::IsNullOrWhiteSpace($env:LOCAL_OLLAMA_HOST)) { '127.0.0.1' } else { $env:LOCAL_OLLAMA_HOST }),
     [int]$Port = 0,
-    [string]$ModelAlias = $env:LOCAL_CODEX_OLLAMA_MODEL_ALIAS,
+    [string]$ModelAlias = $env:LOCAL_OLLAMA_MODEL_ALIAS,
     [int]$StartupTimeoutSec = 0
 )
 
@@ -65,18 +65,18 @@ function Test-OllamaEndpointReady {
 }
 
 if ($Port -le 0) {
-    $Port = Get-EnvInt -Name 'LOCAL_CODEX_OLLAMA_PORT' -DefaultValue 11434
+    $Port = Get-EnvInt -Name 'LOCAL_OLLAMA_PORT' -DefaultValue 11434
 }
 if ($StartupTimeoutSec -le 0) {
-    $StartupTimeoutSec = Get-EnvInt -Name 'LOCAL_CODEX_OLLAMA_STARTUP_TIMEOUT_SEC' -DefaultValue 300
+    $StartupTimeoutSec = Get-EnvInt -Name 'LOCAL_OLLAMA_STARTUP_TIMEOUT_SEC' -DefaultValue 300
 }
 
-$contextLength = Get-EnvInt -Name 'LOCAL_CODEX_OLLAMA_CONTEXT_LENGTH' -DefaultValue 65536
+$contextLength = Get-EnvInt -Name 'LOCAL_OLLAMA_CONTEXT_LENGTH' -DefaultValue 65536
 if ($contextLength -gt 0) {
     $env:OLLAMA_CONTEXT_LENGTH = "$contextLength"
 }
 
-$env:OLLAMA_MODELS = if ($env:LOCAL_CODEX_OLLAMA_MODELS) { $env:LOCAL_CODEX_OLLAMA_MODELS } elseif ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { '/opt/local-codex-kit/ollama-models' }
+$env:OLLAMA_MODELS = if ($env:LOCAL_OLLAMA_MODELS) { $env:LOCAL_OLLAMA_MODELS } elseif ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { '/opt/local-ollama-kit/ollama-models' }
 if (-not (Test-Path -LiteralPath $env:OLLAMA_MODELS)) {
     throw "Configured Ollama model store does not exist: $($env:OLLAMA_MODELS)"
 }
@@ -85,10 +85,10 @@ $baseUrl = "http://$BindHost`:$Port"
 
 $ollama = Get-Command ollama -ErrorAction SilentlyContinue
 if (-not $ollama) {
-    throw "Ollama was not found in PATH."
+    throw 'Ollama was not found in PATH.'
 }
 
-$logDir = if ([string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_LOG_DIR)) { '/tmp/local-codex-kit' } else { $env:LOCAL_CODEX_LOG_DIR }
+$logDir = if ([string]::IsNullOrWhiteSpace($env:LOCAL_OLLAMA_LOG_DIR)) { '/tmp/local-ollama-kit' } else { $env:LOCAL_OLLAMA_LOG_DIR }
 if (-not (Test-Path -LiteralPath $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }
