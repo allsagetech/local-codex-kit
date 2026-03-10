@@ -46,6 +46,28 @@ function Get-DefaultModelRepo {
     return 'openai/gpt-oss-20b'
 }
 
+function Get-DefaultModelEntry {
+    $manifest = @(Get-InstalledModelEntries)
+    if ($manifest.Count -eq 0) {
+        return $null
+    }
+
+    $desiredModel = if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS)) {
+        $env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS
+    } elseif (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_CODEX_MODEL)) {
+        $env:LOCAL_CODEX_CODEX_MODEL
+    } else {
+        $manifest[0].repo
+    }
+
+    $entry = Resolve-InstalledModelEntry -Manifest $manifest -ModelName $desiredModel
+    if ($entry) {
+        return $entry
+    }
+
+    return $manifest[0]
+}
+
 function Normalize-CodexArgumentList {
     param(
         [object[]]$ArgumentList
@@ -134,10 +156,26 @@ function Ensure-ModelInstalled {
 }
 
 function transformers-local {
-    $modelRepo = Get-DefaultModelRepo
+    $modelEntry = Get-DefaultModelEntry
+    if ($null -eq $modelEntry) {
+        throw 'No installed Toolchain-backed model path is available in the manifest.'
+    }
+
+    $modelPath = if (-not [string]::IsNullOrWhiteSpace($modelEntry.package_root)) {
+        Resolve-ToolchainModelPath -PackageRoot $modelEntry.package_root -ModelName $modelEntry.repo
+    } else {
+        Resolve-ToolchainModelPath -PackageRoot $modelEntry.model_path -ModelName $modelEntry.repo
+    }
+    if ([string]::IsNullOrWhiteSpace($modelPath)) {
+        $modelPath = $modelEntry.model_path
+    }
+    if ([string]::IsNullOrWhiteSpace($modelPath)) {
+        throw 'No installed Toolchain-backed model path is available in the manifest.'
+    }
+
     $port = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
 
-    & transformers chat ("localhost:$port") --model-name-or-path $modelRepo @args
+    & transformers chat ("localhost:$port") --model-name-or-path $modelPath @args
 }
 
 function codex-local {

@@ -45,8 +45,7 @@ function Initialize-CodexConfig {
 $env:LOCAL_CODEX_KIT_ROOT = if ($env:LOCAL_CODEX_KIT_ROOT) { $env:LOCAL_CODEX_KIT_ROOT } else { '/opt/local-codex-kit' }
 $env:HOME = if ($env:HOME) { $env:HOME } else { '/home/codex' }
 $env:LOCAL_CODEX_WORKSPACE = if ($env:LOCAL_CODEX_WORKSPACE) { $env:LOCAL_CODEX_WORKSPACE } else { '/workspace' }
-$env:LOCAL_CODEX_HF_CACHE_SEED = if ($env:LOCAL_CODEX_HF_CACHE_SEED) { $env:LOCAL_CODEX_HF_CACHE_SEED } else { '/opt/local-codex-kit/hf-cache-seed' }
-$env:LOCAL_CODEX_HF_HOME = if ($env:LOCAL_CODEX_HF_HOME) { $env:LOCAL_CODEX_HF_HOME } else { '/home/codex/.cache/huggingface' }
+$env:LOCAL_CODEX_TOOLCHAIN_PATH = if ($env:LOCAL_CODEX_TOOLCHAIN_PATH) { $env:LOCAL_CODEX_TOOLCHAIN_PATH } else { '/opt/local-codex-kit/toolchain-store' }
 $env:LOCAL_CODEX_MODEL_MANIFEST = if ($env:LOCAL_CODEX_MODEL_MANIFEST) { $env:LOCAL_CODEX_MODEL_MANIFEST } else { '/opt/local-codex-kit/official-models.manifest.json' }
 $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS = if ($env:LOCAL_CODEX_OFFICIAL_PULL_MODELS) { $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS } else { '' }
 $env:LOCAL_CODEX_TRANSFORMERS_PORT = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
@@ -133,12 +132,12 @@ Write-Host ("- Workspace storage: {0}" -f 'Docker-managed volume mounted at /wor
 if ($env:LOCAL_CODEX_OFFICIAL_PULL_MODELS -and ($env:LOCAL_CODEX_OFFICIAL_PULL_MODELS -ne 'none')) {
     Write-Host ("- Build-downloaded official models: {0}" -f $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS)
 }
-Write-Host ("- Hugging Face cache seed: {0}" -f $env:LOCAL_CODEX_HF_CACHE_SEED)
-Write-Host ("- Runtime Hugging Face cache: {0}" -f $env:LOCAL_CODEX_HF_HOME)
+Write-Host ("- Toolchain model store: {0}" -f $env:LOCAL_CODEX_TOOLCHAIN_PATH)
 Write-Host ("- Transformers mode: {0}" -f $(if ($env:LOCAL_CODEX_TRANSFORMERS_ENABLE -ne '0') { 'enabled' } else { 'disabled' }))
 if ($transformersInfo) {
     Write-Host ("- Transformers endpoint: {0}" -f $transformersInfo.baseUrl)
     Write-Host ("- Default model repo: {0}" -f $transformersInfo.modelRepo)
+    Write-Host ("- Default model path: {0}" -f $transformersInfo.modelPath)
     if ($transformersInfo.started -and $transformersInfo.processId) {
         Write-Host ("- Transformers PID: {0}" -f $transformersInfo.processId)
     }
@@ -151,8 +150,8 @@ Write-Host ("- Codex sandbox: {0}" -f $env:LOCAL_CODEX_CODEX_SANDBOX_MODE)
 Write-Host ("- Codex approvals: {0}" -f $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY)
 Write-Host '- Container hardening: non-root user, read-only root filesystem, tmpfs-backed /tmp, no-new-privileges, all Linux capabilities dropped.'
 Write-Host '- Linux-native tools: code, chromium, git, go, python, helm, zarf, node, gcc/clang, transformers.'
-Write-Host '- Official weights are seeded into the image and copied into a writable Hugging Face cache volume at runtime.'
-Write-Host '- This path uses the official OpenAI Hugging Face weights, not GGUF conversions.'
+Write-Host '- Official weights are pulled into the image as Toolchain packages and served from their extracted model path.'
+Write-Host '- This path uses packaged official OpenAI weights, not GGUF conversions.'
 Write-Host '- `code .` inside this headless container will not launch Windows VS Code.'
 Write-Host ''
 

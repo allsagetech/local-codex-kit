@@ -7,11 +7,17 @@ ARG LOCAL_CODEX_OFFICIAL_PULL_MODELS=openai/gpt-oss-20b
 ARG LOCAL_CODEX_RUNTIME_USER=codex
 ARG LOCAL_CODEX_RUNTIME_UID=1000
 ARG LOCAL_CODEX_RUNTIME_GID=1000
-ARG LOCAL_CODEX_HF_CACHE_SEED=/opt/local-codex-kit/hf-cache-seed
+ARG LOCAL_CODEX_TOOLCHAIN_PATH=/opt/local-codex-kit/toolchain-store
 ARG LOCAL_CODEX_MODEL_MANIFEST=/opt/local-codex-kit/official-models.manifest.json
+ARG LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B=openai-gpt-oss-20b:1.0.0
+ARG LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B=
+ARG TOOLCHAIN_MODULE_VERSION=2.0.6
+ARG TOOLCHAIN_TOKEN=
+ARG TOOLCHAIN_USERNAME=
+ARG TOOLCHAIN_PASSWORD=
 ARG NODE_LINUX_ARCHIVE_URL=https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz
-ARG HELM_RELEASE_API_URL=https://api.github.com/repos/helm/helm/releases/latest
-ARG ZARF_RELEASE_API_URL=https://api.github.com/repos/zarf-dev/zarf/releases/latest
+ARG HELM_VERSION=v4.1.1
+ARG ZARF_VERSION=v0.73.1
 
 WORKDIR /opt/local-codex-kit
 
@@ -57,30 +63,36 @@ RUN set -eux \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux \
-    && curl -fsSL "${NODE_LINUX_ARCHIVE_URL}" | tar -xJ --strip-components=1 -C /usr/local \
+    && fetch() { curl --fail --show-error --silent --location --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 600 "$@"; } \
+    && fetch "${NODE_LINUX_ARCHIVE_URL}" | tar -xJ --strip-components=1 -C /usr/local \
     && npm install -g @openai/codex \
+    && /usr/local/bin/pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module Toolchain -RequiredVersion '${TOOLCHAIN_MODULE_VERSION}' -Scope AllUsers -Force"
+
+RUN set -eux \
     && python -m pip install --no-cache-dir \
         'torch>=2.8.0' \
         'transformers[serving]>=5.2.0' \
-        'huggingface_hub[hf_xet]>=0.32.0' \
         'accelerate>=1.10.0' \
-        'safetensors>=0.6.0' \
-    && HELM_VERSION="$(curl -fsSL "${HELM_RELEASE_API_URL}" | jq -r '.tag_name')" \
-    && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
+        'safetensors>=0.6.0'
+
+RUN set -eux \
+    && fetch() { curl --fail --show-error --silent --location --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 30 --max-time 600 "$@"; } \
+    && fetch "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tgz \
     && tar -xzf /tmp/helm.tgz -C /tmp \
     && install /tmp/linux-amd64/helm /usr/local/bin/helm \
     && rm -rf /tmp/helm.tgz /tmp/linux-amd64 \
-    && ZARF_VERSION="$(curl -fsSL "${ZARF_RELEASE_API_URL}" | jq -r '.tag_name')" \
-    && curl -fsSL "https://github.com/zarf-dev/zarf/releases/download/${ZARF_VERSION}/zarf_${ZARF_VERSION}_Linux_amd64" -o /usr/local/bin/zarf \
+    && fetch "https://github.com/zarf-dev/zarf/releases/download/${ZARF_VERSION}/zarf_${ZARF_VERSION}_Linux_amd64" -o /usr/local/bin/zarf \
     && chmod +x /usr/local/bin/zarf \
     && ln -sf /usr/bin/google-chrome-stable /usr/local/bin/chromium
 
 ENV LOCAL_CODEX_RUNTIME_USER=${LOCAL_CODEX_RUNTIME_USER}
 ENV HOME=/home/${LOCAL_CODEX_RUNTIME_USER}
 ENV CODEX_HOME=/home/${LOCAL_CODEX_RUNTIME_USER}/.codex
-ENV LOCAL_CODEX_HF_CACHE_SEED=${LOCAL_CODEX_HF_CACHE_SEED}
+ENV LOCAL_CODEX_TOOLCHAIN_PATH=${LOCAL_CODEX_TOOLCHAIN_PATH}
 ENV LOCAL_CODEX_MODEL_MANIFEST=${LOCAL_CODEX_MODEL_MANIFEST}
 ENV LOCAL_CODEX_OFFICIAL_PULL_MODELS=${LOCAL_CODEX_OFFICIAL_PULL_MODELS}
+ENV LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B=${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B}
+ENV LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B=${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B}
 
 COPY . .
 
@@ -90,15 +102,15 @@ RUN set -eux \
     && install -d -m 0755 -o "${LOCAL_CODEX_RUNTIME_UID}" -g "${LOCAL_CODEX_RUNTIME_GID}" \
         /workspace \
         "${CODEX_HOME}" \
-        "${HOME}/.cache/huggingface" \
+        "${HOME}/.cache" \
         "${HOME}/.config/powershell" \
-        "${LOCAL_CODEX_HF_CACHE_SEED}" \
+        "${LOCAL_CODEX_TOOLCHAIN_PATH}" \
     && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
     && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code
 
 RUN set -eux \
-    && HOME="${HOME}" LOCAL_CODEX_HF_CACHE_SEED="${LOCAL_CODEX_HF_CACHE_SEED}" LOCAL_CODEX_MODEL_MANIFEST="${LOCAL_CODEX_MODEL_MANIFEST}" /usr/local/bin/pwsh -NoLogo -NoProfile -File ./pull-official-models.ps1 -Models "${LOCAL_CODEX_OFFICIAL_PULL_MODELS}" \
-    && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}" /workspace "${LOCAL_CODEX_HF_CACHE_SEED}"
+    && HOME="${HOME}" LOCAL_CODEX_TOOLCHAIN_PATH="${LOCAL_CODEX_TOOLCHAIN_PATH}" LOCAL_CODEX_MODEL_MANIFEST="${LOCAL_CODEX_MODEL_MANIFEST}" LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B="${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B}" LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B="${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B}" TOOLCHAIN_TOKEN="${TOOLCHAIN_TOKEN}" TOOLCHAIN_USERNAME="${TOOLCHAIN_USERNAME}" TOOLCHAIN_PASSWORD="${TOOLCHAIN_PASSWORD}" /usr/local/bin/pwsh -NoLogo -NoProfile -File ./pull-official-models.ps1 -Models "${LOCAL_CODEX_OFFICIAL_PULL_MODELS}" \
+    && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}" /workspace "${LOCAL_CODEX_TOOLCHAIN_PATH}"
 
 USER ${LOCAL_CODEX_RUNTIME_USER}
 

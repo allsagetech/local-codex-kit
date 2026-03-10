@@ -2,46 +2,10 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path (Split-Path -Parent $PSCommandPath) 'official-models.ps1')
 
-function Sync-SeededHfCache {
-    param(
-        [string]$SeedRoot,
-        [string]$TargetRoot,
-        [string]$RequiredCacheSlug
-    )
-
-    if (-not (Test-Path -LiteralPath $SeedRoot)) {
-        throw ("Hugging Face cache seed not found: {0}" -f $SeedRoot)
-    }
-
-    if (-not (Test-Path -LiteralPath $TargetRoot)) {
-        New-Item -ItemType Directory -Path $TargetRoot -Force | Out-Null
-    }
-
-    $requiredSourcePath = Join-Path (Join-Path $SeedRoot 'hub') $RequiredCacheSlug
-    if (-not (Test-Path -LiteralPath $requiredSourcePath)) {
-        throw ("Seeded model cache entry not found: {0}" -f $requiredSourcePath)
-    }
-
-    $requiredTargetPath = Join-Path (Join-Path $TargetRoot 'hub') $RequiredCacheSlug
-    if (Test-Path -LiteralPath $requiredTargetPath) {
-        return
-    }
-
-    $seedItems = Get-ChildItem -LiteralPath $SeedRoot -Force
-    foreach ($item in $seedItems) {
-        Copy-Item -LiteralPath $item.FullName -Destination $TargetRoot -Recurse -Force
-    }
-}
-
-$env:LOCAL_CODEX_HF_CACHE_SEED = if ($env:LOCAL_CODEX_HF_CACHE_SEED) { $env:LOCAL_CODEX_HF_CACHE_SEED } else { '/opt/local-codex-kit/hf-cache-seed' }
-$env:LOCAL_CODEX_HF_HOME = if ($env:LOCAL_CODEX_HF_HOME) { $env:LOCAL_CODEX_HF_HOME } else { '/home/codex/.cache/huggingface' }
 $env:LOCAL_CODEX_MODEL_MANIFEST = if ($env:LOCAL_CODEX_MODEL_MANIFEST) { $env:LOCAL_CODEX_MODEL_MANIFEST } else { '/opt/local-codex-kit/official-models.manifest.json' }
 $env:LOCAL_CODEX_TRANSFORMERS_PORT = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
 $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC = if ($env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC) { $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC } else { '300' }
 $env:LOCAL_CODEX_TRANSFORMERS_DTYPE = if ($env:LOCAL_CODEX_TRANSFORMERS_DTYPE) { $env:LOCAL_CODEX_TRANSFORMERS_DTYPE } else { 'auto' }
-$env:TRANSFORMERS_OFFLINE = if ($env:TRANSFORMERS_OFFLINE) { $env:TRANSFORMERS_OFFLINE } else { '1' }
-$env:HF_HUB_OFFLINE = if ($env:HF_HUB_OFFLINE) { $env:HF_HUB_OFFLINE } else { '1' }
-$env:HF_HOME = $env:LOCAL_CODEX_HF_HOME
 
 $transformers = Get-Command transformers -ErrorAction SilentlyContinue
 if (-not $transformers) {
@@ -67,10 +31,22 @@ if ($null -eq $modelEntry) {
     throw ("Configured official model '{0}' is not available. Installed models: {1}" -f $selectedModel, $availableModels)
 }
 
-Sync-SeededHfCache `
-    -SeedRoot $env:LOCAL_CODEX_HF_CACHE_SEED `
-    -TargetRoot $env:LOCAL_CODEX_HF_HOME `
-    -RequiredCacheSlug $modelEntry.cache_slug
+$resolvedModelPath = if (-not [string]::IsNullOrWhiteSpace($modelEntry.package_root)) {
+    Resolve-ToolchainModelPath -PackageRoot $modelEntry.package_root -ModelName $modelEntry.repo
+} else {
+    Resolve-ToolchainModelPath -PackageRoot $modelEntry.model_path -ModelName $modelEntry.repo
+}
+if ([string]::IsNullOrWhiteSpace($resolvedModelPath)) {
+    $resolvedModelPath = $modelEntry.model_path
+}
+
+if ([string]::IsNullOrWhiteSpace($resolvedModelPath)) {
+    throw ("Installed model '{0}' does not define a local model path in manifest '{1}'." -f $modelEntry.repo, $env:LOCAL_CODEX_MODEL_MANIFEST)
+}
+
+if (-not (Test-Path -LiteralPath $resolvedModelPath)) {
+    throw ("Installed model path does not exist: {0}" -f $resolvedModelPath)
+}
 
 $logDir = '/tmp/local-codex-kit'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
@@ -81,7 +57,7 @@ $argumentList = @(
     'serve',
     '--host', '127.0.0.1',
     '--port', $env:LOCAL_CODEX_TRANSFORMERS_PORT,
-    '--force-model', $modelEntry.repo
+    '--force-model', $resolvedModelPath
 )
 
 if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TRANSFORMERS_DTYPE) -and ($env:LOCAL_CODEX_TRANSFORMERS_DTYPE -ne 'auto')) {
@@ -112,7 +88,7 @@ while ((Get-Date) -lt $deadline) {
                 processId     = $proc.Id
                 baseUrl       = $baseUrl
                 modelRepo     = $modelEntry.repo
-                cacheSlug     = $modelEntry.cache_slug
+                modelPath     = $resolvedModelPath
                 stdoutLogPath = $outLog
                 stderrLogPath = $errLog
             }

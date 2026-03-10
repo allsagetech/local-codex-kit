@@ -5,6 +5,11 @@ services:
       args:
         LOCAL_CODEX_BASE_IMAGE: ${LOCAL_CODEX_BASE_IMAGE:-ubuntu:22.04}
         LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
+        LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B: ${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B:-openai-gpt-oss-20b:1.0.0}
+        LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B: ${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B:-}
+        TOOLCHAIN_TOKEN: ${TOOLCHAIN_TOKEN:-}
+        TOOLCHAIN_USERNAME: ${TOOLCHAIN_USERNAME:-}
+        TOOLCHAIN_PASSWORD: ${TOOLCHAIN_PASSWORD:-}
     image: allsagetech/local-codex-kit:latest
     network_mode: "none"
     init: true
@@ -25,8 +30,7 @@ services:
       HOME: /home/codex
       CODEX_HOME: /home/codex/.codex
       LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_HF_CACHE_SEED: /opt/local-codex-kit/hf-cache-seed
-      LOCAL_CODEX_HF_HOME: /home/codex/.cache/huggingface
+      LOCAL_CODEX_TOOLCHAIN_PATH: /opt/local-codex-kit/toolchain-store
       LOCAL_CODEX_MODEL_MANIFEST: /opt/local-codex-kit/official-models.manifest.json
       LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
       LOCAL_CODEX_OFFICIAL_MODEL_ALIAS: ${LOCAL_CODEX_OFFICIAL_MODEL_ALIAS:-}
@@ -41,7 +45,7 @@ services:
       LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
     volumes:
       - local-codex-kit-workspace:/workspace
-      - local-codex-kit-hf-home:/home/codex/.cache/huggingface
+      - local-codex-kit-cache:/home/codex/.cache
       - local-codex-kit-codex-home:/home/codex/.codex
       - type: bind
         source: ${LOCAL_CODEX_HOST_PROJECT_PATH:-./host-project}
@@ -49,5 +53,5 @@ services:
 
 volumes:
   local-codex-kit-workspace:
-  local-codex-kit-hf-home:
+  local-codex-kit-cache:
   local-codex-kit-codex-home:

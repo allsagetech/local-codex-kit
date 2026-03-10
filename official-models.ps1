@@ -70,6 +70,39 @@ function Convert-ToModelAlias {
     return $canonicalModel.Replace(':', '-')
 }
 
+function Resolve-OfficialModelPackageRef {
+    param(
+        [string]$ModelName
+    )
+
+    $canonicalModel = Convert-ToCanonicalModelName -ModelName $ModelName
+    if ([string]::IsNullOrWhiteSpace($canonicalModel)) {
+        return ''
+    }
+
+    switch ($canonicalModel) {
+        'openai/gpt-oss-20b' {
+            if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B)) {
+                return $env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B
+            }
+
+            return 'openai-gpt-oss-20b:1.0.0'
+        }
+
+        'openai/gpt-oss-120b' {
+            if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B)) {
+                return $env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B
+            }
+
+            throw "No Toolchain package is configured for '$canonicalModel'. Set LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B."
+        }
+
+        default {
+            throw "No Toolchain package mapping is configured for '$canonicalModel'."
+        }
+    }
+}
+
 function Convert-ToHfCacheSlug {
     param(
         [string]$ModelName
@@ -81,6 +114,73 @@ function Convert-ToHfCacheSlug {
     }
 
     return 'models--' + $canonicalModel.Replace('/', '--')
+}
+
+function Resolve-ToolchainContentPath {
+    param(
+        [string]$ToolchainPath,
+        [string]$Digest
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ToolchainPath) -or [string]::IsNullOrWhiteSpace($Digest)) {
+        return ''
+    }
+
+    if (-not $Digest.StartsWith('sha256:')) {
+        throw "Unsupported Toolchain digest '$Digest'."
+    }
+
+    $shortDigest = $Digest.Substring('sha256:'.Length)
+    if ($shortDigest.Length -lt 12) {
+        throw "Toolchain digest '$Digest' is shorter than expected."
+    }
+
+    return (Join-Path (Join-Path $ToolchainPath 'content') $shortDigest.Substring(0, 12))
+}
+
+function Resolve-ToolchainModelPath {
+    param(
+        [string]$PackageRoot,
+        [string]$ModelName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PackageRoot) -or [string]::IsNullOrWhiteSpace($ModelName)) {
+        return ''
+    }
+
+    $hfCacheRoot = Join-Path $PackageRoot 'cache/hf-cache'
+    $cacheSlug = Convert-ToHfCacheSlug -ModelName $ModelName
+    if ([string]::IsNullOrWhiteSpace($cacheSlug)) {
+        return $PackageRoot
+    }
+
+    $repoCacheRoot = Join-Path $hfCacheRoot $cacheSlug
+    if (-not (Test-Path -LiteralPath $repoCacheRoot)) {
+        return $PackageRoot
+    }
+
+    $refsMainPath = Join-Path (Join-Path $repoCacheRoot 'refs') 'main'
+    if (Test-Path -LiteralPath $refsMainPath) {
+        $snapshotId = (Get-Content -LiteralPath $refsMainPath -Raw).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($snapshotId)) {
+            $snapshotPath = Join-Path (Join-Path $repoCacheRoot 'snapshots') $snapshotId
+            if (Test-Path -LiteralPath $snapshotPath) {
+                return $snapshotPath
+            }
+        }
+    }
+
+    $snapshotsRoot = Join-Path $repoCacheRoot 'snapshots'
+    if (-not (Test-Path -LiteralPath $snapshotsRoot)) {
+        return $PackageRoot
+    }
+
+    $snapshotDirectory = Get-ChildItem -LiteralPath $snapshotsRoot -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($snapshotDirectory) {
+        return $snapshotDirectory.FullName
+    }
+
+    return $PackageRoot
 }
 
 function Convert-ToTomlString {
