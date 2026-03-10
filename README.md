@@ -85,9 +85,6 @@ Accepted aliases:
 - `openai/gpt-oss-20b`
 - `gpt-oss-20b`
 - `gpt-oss:20b`
-- `openai/gpt-oss-120b`
-- `gpt-oss-120b`
-- `gpt-oss:120b`
 
 By default, `openai/gpt-oss-20b` maps to the Toolchain package ref `openai-gpt-oss-20b:1.0.0`.
 
@@ -110,13 +107,6 @@ docker compose build local-codex-kit
 Set `LOCAL_CODEX_OFFICIAL_PULL_MODELS=none` to skip build-time downloads entirely.
 
 At runtime, `transformers serve` is pointed at the pulled Toolchain package content baked into the image. To change the available model set, rebuild the image.
-
-To select a different baked model at runtime:
-
-```powershell
-$env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS='openai/gpt-oss-120b'
-docker compose run --rm local-codex-kit
-```
 
 If you need to override the Codex model name explicitly, set `LOCAL_CODEX_CODEX_MODEL` to the official model id, for example `openai/gpt-oss-20b`.
 

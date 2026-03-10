@@ -89,14 +89,6 @@ function Resolve-OfficialModelPackageRef {
             return 'openai-gpt-oss-20b:1.0.0'
         }
 
-        'openai/gpt-oss-120b' {
-            if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B)) {
-                return $env:LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B
-            }
-
-            throw "No Toolchain package is configured for '$canonicalModel'. Set LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_120B."
-        }
-
         default {
             throw "No Toolchain package mapping is configured for '$canonicalModel'."
         }
