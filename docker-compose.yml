@@ -6,7 +6,7 @@ services:
       context: .
       args:
         LOCAL_OLLAMA_BASE_IMAGE: ${LOCAL_OLLAMA_BASE_IMAGE:-ubuntu:22.04}
-        LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+        LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-qwen2.5-coder:14b}
     image: allsagetech/local-ollama-kit:latest
     network_mode: "none"
     init: true
@@ -27,7 +27,7 @@ services:
       HOME: /home/ollama
       LOCAL_OLLAMA_WORKSPACE: /workspace
       LOCAL_OLLAMA_MODELS: /opt/local-ollama-kit/ollama-models
-      LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-gpt-oss:20b}
+      LOCAL_OLLAMA_PULL_MODELS: ${LOCAL_OLLAMA_PULL_MODELS:-qwen2.5-coder:14b}
       LOCAL_OLLAMA_ENABLE: ${LOCAL_OLLAMA_ENABLE:-1}
       LOCAL_OLLAMA_PORT: ${LOCAL_OLLAMA_PORT:-11434}
       LOCAL_OLLAMA_MODEL_ALIAS: ${LOCAL_OLLAMA_MODEL_ALIAS:-}

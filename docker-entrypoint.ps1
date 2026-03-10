@@ -20,7 +20,7 @@ function Get-FirstConfiguredOllamaModel {
     return $null
 }
 
-function Convert-ToOllamaModelName {
+function Resolve-OllamaModelName {
     param(
         [string]$ModelName
     )
@@ -29,16 +29,7 @@ function Convert-ToOllamaModelName {
         return ''
     }
 
-    $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "gpt-oss:$($Matches[1])"
-    }
-
-    if ($resolvedModel -match '^gpt-oss-(.+)$') {
-        return "gpt-oss:$($Matches[1])"
-    }
-
-    return $resolvedModel
+    return $ModelName.Trim()
 }
 
 $env:LOCAL_OLLAMA_KIT_ROOT = if ($env:LOCAL_OLLAMA_KIT_ROOT) { $env:LOCAL_OLLAMA_KIT_ROOT } else { '/opt/local-ollama-kit' }
@@ -62,7 +53,7 @@ $requestedModel = if ($env:LOCAL_OLLAMA_MODEL_ALIAS) {
 
 $env:LOCAL_OLLAMA_ENABLE = if ($env:LOCAL_OLLAMA_ENABLE) { $env:LOCAL_OLLAMA_ENABLE } else { '1' }
 $env:LOCAL_OLLAMA_MODEL_ALIAS = if ($requestedModel) {
-    Convert-ToOllamaModelName -ModelName $requestedModel
+    Resolve-OllamaModelName -ModelName $requestedModel
 } else {
     ''
 }

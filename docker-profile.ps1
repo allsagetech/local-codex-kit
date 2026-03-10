@@ -44,10 +44,10 @@ function Get-DefaultOllamaModel {
     } catch {
     }
 
-    return 'gpt-oss:20b'
+    return 'qwen2.5-coder:14b'
 }
 
-function Convert-ToOllamaCompatibleModelName {
+function Resolve-OllamaModelName {
     param(
         [string]$ModelName
     )
@@ -56,16 +56,7 @@ function Convert-ToOllamaCompatibleModelName {
         return ''
     }
 
-    $resolvedModel = $ModelName.Trim()
-    if ($resolvedModel -match '^openai/gpt-oss-(.+)$') {
-        return "gpt-oss:$($Matches[1])"
-    }
-
-    if ($resolvedModel -match '^gpt-oss-(.+)$') {
-        return "gpt-oss:$($Matches[1])"
-    }
-
-    return $resolvedModel
+    return $ModelName.Trim()
 }
 
 function Ensure-OllamaModelInstalled {
@@ -73,7 +64,7 @@ function Ensure-OllamaModelInstalled {
         [string]$ModelName
     )
 
-    $resolvedOllamaModel = Convert-ToOllamaCompatibleModelName -ModelName $ModelName
+    $resolvedOllamaModel = Resolve-OllamaModelName -ModelName $ModelName
     if ([string]::IsNullOrWhiteSpace($resolvedOllamaModel)) {
         return $true
     }
@@ -99,7 +90,7 @@ function Ensure-OllamaModelInstalled {
 }
 
 function ollama-local {
-    $model = Get-DefaultOllamaModel | Convert-ToOllamaCompatibleModelName
+    $model = Get-DefaultOllamaModel | Resolve-OllamaModelName
 
     if (
         -not [string]::IsNullOrWhiteSpace($model) -and

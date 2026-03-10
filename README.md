@@ -19,7 +19,7 @@ The intended workflow is:
 ## What this repo does
 
 - runs `ollama serve` inside the same container
-- defaults to Ollama tag `gpt-oss:20b`
+- defaults to Ollama tag `qwen2.5-coder:14b`
 - stores the workspace and runtime state in Docker-managed volumes
 - stores the Ollama model payload inside the image at `/opt/local-ollama-kit/ollama-models`
 - keeps runtime network access disabled
@@ -64,7 +64,7 @@ ollama-local
 Equivalent manual Ollama command inside the container:
 
 ```powershell
-ollama run gpt-oss:20b
+ollama run qwen2.5-coder:14b
 ```
 
 ## Security model
@@ -117,12 +117,12 @@ Models are selected at image-build time through `LOCAL_OLLAMA_PULL_MODELS`.
 Common examples:
 
 ```powershell
-$env:LOCAL_OLLAMA_PULL_MODELS='gpt-oss:20b'
+$env:LOCAL_OLLAMA_PULL_MODELS='qwen2.5-coder:14b'
 docker compose build local-ollama-kit
 ```
 
 ```powershell
-$env:LOCAL_OLLAMA_PULL_MODELS='gpt-oss:20b,gpt-oss:120b'
+$env:LOCAL_OLLAMA_PULL_MODELS='qwen2.5-coder:14b,qwen2.5-coder:32b'
 docker compose build local-ollama-kit
 ```
 
@@ -133,7 +133,7 @@ At runtime, Ollama reads models from the image-baked model store at `/opt/local-
 To select a different baked model at runtime:
 
 ```powershell
-$env:LOCAL_OLLAMA_MODEL_ALIAS='gpt-oss:120b'
+$env:LOCAL_OLLAMA_MODEL_ALIAS='qwen2.5-coder:32b'
 docker compose run --rm local-ollama-kit
 ```
 
