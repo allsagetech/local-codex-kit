@@ -101,6 +101,7 @@ RUN set -eux \
         /workspace \
         "${CODEX_HOME}" \
         "${HOME}/.cache" \
+        "${HOME}/.cache/huggingface/hub" \
         "${HOME}/.config/powershell" \
         "${LOCAL_CODEX_TOOLCHAIN_PATH}" \
     && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \

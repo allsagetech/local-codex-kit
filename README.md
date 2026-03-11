@@ -50,6 +50,12 @@ Start the container:
 docker compose run --rm local-codex-kit
 ```
 
+If you want Docker GPU passthrough on Compose builds that do not accept `run --gpus ...`, add the GPU override file:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm local-codex-kit
+```
+
 Inside the container:
 
 ```powershell
@@ -62,6 +68,8 @@ Equivalent manual Codex command inside the container after the entrypoint writes
 ```powershell
 codex -m openai/gpt-oss-20b
 ```
+
+The entrypoint writes a managed custom provider config that points Codex at the embedded OpenAI-compatible endpoint and uses the Responses API expected by current Codex CLI builds. It does not rely on the built-in `--oss` provider, which is reserved for LM Studio/Ollama.
 
 To chat against the embedded server directly:
 
@@ -117,19 +125,30 @@ The embedded server is `transformers serve`, which exposes an OpenAI-compatible 
 Default runtime settings:
 
 - `LOCAL_CODEX_TRANSFORMERS_PORT=8000`
+- `LOCAL_CODEX_TRANSFORMERS_DEVICE=auto`
 - `LOCAL_CODEX_TRANSFORMERS_DTYPE=auto`
 - `LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING=0`
+- `LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK=0`
 
 Optional tuning:
 
 ```powershell
 $env:LOCAL_CODEX_TRANSFORMERS_DTYPE='float16'
+$env:LOCAL_CODEX_TRANSFORMERS_DEVICE='cuda'
 $env:LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING='1'
 $env:LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION='sdpa'
-docker compose run --rm local-codex-kit
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm local-codex-kit
 ```
 
 This path is more faithful to the official weights, but it is also heavier than the GGUF/Ollama path. You should expect stronger hardware requirements.
+
+On CPU-only hosts, the default `auto` device selection is disabled up front for the bundled MXFP4 `gpt-oss-20b` weights because current `transformers serve` falls over during auto offload. If you want to try a CPU run anyway, opt in explicitly:
+
+```powershell
+$env:LOCAL_CODEX_TRANSFORMERS_DEVICE='cpu'
+$env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK='1'
+docker compose run --rm local-codex-kit
+```
 
 ## State
 
@@ -144,6 +163,8 @@ The service also includes one host bind mount at `/workspace/project`, which def
 ## Troubleshooting
 
 If the Transformers server fails to start, the entrypoint prints log file paths from `/tmp/local-codex-kit` before dropping you into the shell.
+
+If `codex-local` refuses to start, it now means the embedded runtime is disabled or unreachable; fix the startup warning first instead of retrying the Codex CLI against a dead local endpoint.
 
 Useful checks inside the container:
 

@@ -6,10 +6,90 @@ $env:LOCAL_CODEX_MODEL_MANIFEST = if ($env:LOCAL_CODEX_MODEL_MANIFEST) { $env:LO
 $env:LOCAL_CODEX_TRANSFORMERS_PORT = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
 $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC = if ($env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC) { $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC } else { '300' }
 $env:LOCAL_CODEX_TRANSFORMERS_DTYPE = if ($env:LOCAL_CODEX_TRANSFORMERS_DTYPE) { $env:LOCAL_CODEX_TRANSFORMERS_DTYPE } else { 'auto' }
+$env:LOCAL_CODEX_TRANSFORMERS_DEVICE = if ($env:LOCAL_CODEX_TRANSFORMERS_DEVICE) { $env:LOCAL_CODEX_TRANSFORMERS_DEVICE } else { 'auto' }
+$env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK = if ($env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK) { $env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK } else { '0' }
 
 $transformers = Get-Command transformers -ErrorAction SilentlyContinue
 if (-not $transformers) {
     throw '`transformers` CLI is not installed in this image.'
+}
+
+function Get-TransformersRuntimeInfo {
+    $runtimeJson = & python -c @'
+import json
+
+try:
+    import torch
+except Exception as exc:
+    print(json.dumps({"torch_import_error": str(exc)}))
+    raise SystemExit(0)
+
+cuda_available = bool(getattr(torch.cuda, "is_available", lambda: False)())
+cuda_device_count = int(getattr(torch.cuda, "device_count", lambda: 0)()) if cuda_available else 0
+cuda_capability = None
+if cuda_available and cuda_device_count > 0:
+    try:
+        major, minor = torch.cuda.get_device_capability(0)
+        cuda_capability = f"{major}.{minor}"
+    except Exception:
+        cuda_capability = None
+
+xpu_module = getattr(torch, "xpu", None)
+xpu_available = False
+if xpu_module is not None:
+    try:
+        xpu_available = bool(xpu_module.is_available())
+    except Exception:
+        xpu_available = False
+
+print(json.dumps({
+    "cuda_available": cuda_available,
+    "cuda_device_count": cuda_device_count,
+    "cuda_capability": cuda_capability,
+    "xpu_available": xpu_available,
+}))
+'@
+
+    if ([string]::IsNullOrWhiteSpace($runtimeJson)) {
+        return [pscustomobject]@{
+            cuda_available   = $false
+            cuda_device_count = 0
+            cuda_capability  = $null
+            xpu_available    = $false
+            torch_import_error = 'python runtime probe returned no output'
+        }
+    }
+
+    return ($runtimeJson | ConvertFrom-Json)
+}
+
+function Assert-TransformersRuntimeSupported {
+    param(
+        [string]$ModelName
+    )
+
+    if ($env:LOCAL_CODEX_TRANSFORMERS_DEVICE -ne 'auto') {
+        return
+    }
+
+    $runtimeInfo = Get-TransformersRuntimeInfo
+    if ($runtimeInfo.torch_import_error) {
+        throw ("Unable to inspect Torch runtime support: {0}" -f $runtimeInfo.torch_import_error)
+    }
+
+    if ($runtimeInfo.cuda_available -or $runtimeInfo.xpu_available) {
+        return
+    }
+
+    if ($env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK -eq '1') {
+        return
+    }
+
+    $message = (
+        "No supported accelerator was detected for '{0}'. This image defaults to the official MXFP4 weights, and on CPU-only hosts `transformers serve` currently fails during auto offload. " +
+        "Set LOCAL_CODEX_TRANSFORMERS_DEVICE=cpu and LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK=1 only if you intentionally want to try a large RAM-heavy CPU run."
+    ) -f $ModelName
+    throw $message
 }
 
 $manifest = @(Read-ModelManifest -ManifestPath $env:LOCAL_CODEX_MODEL_MANIFEST)
@@ -30,6 +110,8 @@ if ($null -eq $modelEntry) {
     $availableModels = ($manifest | ForEach-Object { $_.repo }) -join ', '
     throw ("Configured official model '{0}' is not available. Installed models: {1}" -f $selectedModel, $availableModels)
 }
+
+Assert-TransformersRuntimeSupported -ModelName $modelEntry.repo
 
 $resolvedModelPath = if (-not [string]::IsNullOrWhiteSpace($modelEntry.package_root)) {
     Resolve-ToolchainModelPath -PackageRoot $modelEntry.package_root -ModelName $modelEntry.repo
@@ -57,6 +139,7 @@ $argumentList = @(
     'serve',
     '--host', '127.0.0.1',
     '--port', $env:LOCAL_CODEX_TRANSFORMERS_PORT,
+    '--device', $env:LOCAL_CODEX_TRANSFORMERS_DEVICE,
     '--force-model', $resolvedModelPath
 )
 

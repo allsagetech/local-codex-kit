@@ -9,7 +9,11 @@ function Initialize-CodexConfig {
         [string]$OssBaseUrl,
         [string]$DefaultModel,
         [string]$ApprovalPolicy,
-        [string]$SandboxMode
+        [string]$SandboxMode,
+        [string]$ProviderName,
+        [string]$ProviderDisplayName,
+        [string]$ProviderWireApi,
+        [string]$ProviderEnvKey
     )
 
     if (-not (Test-Path -LiteralPath $CodexHome)) {
@@ -20,14 +24,16 @@ function Initialize-CodexConfig {
     $managedHeader = '# Managed by local-codex-kit. Remove this line to stop auto-refresh.'
     $configContent = @(
         $managedHeader
-        'model_provider = "oss"'
+        'model_provider = ' + (Convert-ToTomlString -Value $ProviderName)
         'model = ' + (Convert-ToTomlString -Value $DefaultModel)
         'approval_policy = ' + (Convert-ToTomlString -Value $ApprovalPolicy)
         'sandbox_mode = ' + (Convert-ToTomlString -Value $SandboxMode)
         ''
-        '[model_providers.oss]'
-        'name = "Official gpt-oss (Transformers)"'
+        ('[model_providers.{0}]' -f $ProviderName)
+        'name = ' + (Convert-ToTomlString -Value $ProviderDisplayName)
         'base_url = ' + (Convert-ToTomlString -Value $OssBaseUrl)
+        'wire_api = ' + (Convert-ToTomlString -Value $ProviderWireApi)
+        'env_key = ' + (Convert-ToTomlString -Value $ProviderEnvKey)
         ''
     ) -join "`n"
 
@@ -54,6 +60,10 @@ $env:LOCAL_CODEX_TRANSFORMERS_ENABLE = if ($env:LOCAL_CODEX_TRANSFORMERS_ENABLE)
 $env:CODEX_HOME = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { '/home/codex/.codex' }
 $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY = if ($env:LOCAL_CODEX_CODEX_APPROVAL_POLICY) { $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY } else { 'on-request' }
 $env:LOCAL_CODEX_CODEX_SANDBOX_MODE = if ($env:LOCAL_CODEX_CODEX_SANDBOX_MODE) { $env:LOCAL_CODEX_CODEX_SANDBOX_MODE } else { 'danger-full-access' }
+$env:LOCAL_CODEX_CODEX_PROVIDER = if ($env:LOCAL_CODEX_CODEX_PROVIDER) { $env:LOCAL_CODEX_CODEX_PROVIDER } else { 'transformers' }
+$env:LOCAL_CODEX_TRANSFORMERS_API_KEY = if ($env:LOCAL_CODEX_TRANSFORMERS_API_KEY) { $env:LOCAL_CODEX_TRANSFORMERS_API_KEY } else { 'local-codex' }
+$env:HF_HOME = if ($env:HF_HOME) { $env:HF_HOME } else { Join-Path $env:HOME '.cache/huggingface' }
+$env:HF_HUB_CACHE = if ($env:HF_HUB_CACHE) { $env:HF_HUB_CACHE } else { Join-Path $env:HF_HOME 'hub' }
 
 $defaultPulledModel = Get-FirstConfiguredModel -RawModels $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS
 $requestedModel = if ($env:LOCAL_CODEX_OFFICIAL_MODEL_ALIAS) {
@@ -74,6 +84,12 @@ $env:LOCAL_CODEX_CODEX_MODEL = if ($env:LOCAL_CODEX_CODEX_MODEL) {
 $workspace = $env:LOCAL_CODEX_WORKSPACE
 if (-not (Test-Path -LiteralPath $workspace)) {
     New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+}
+
+foreach ($path in @($env:HF_HOME, $env:HF_HUB_CACHE)) {
+    if (-not [string]::IsNullOrWhiteSpace($path) -and -not (Test-Path -LiteralPath $path)) {
+        New-Item -ItemType Directory -Path $path -Force | Out-Null
+    }
 }
 
 Set-Location $workspace
@@ -114,7 +130,11 @@ Initialize-CodexConfig `
     -OssBaseUrl $env:CODEX_OSS_BASE_URL `
     -DefaultModel $env:LOCAL_CODEX_CODEX_MODEL `
     -ApprovalPolicy $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY `
-    -SandboxMode $env:LOCAL_CODEX_CODEX_SANDBOX_MODE
+    -SandboxMode $env:LOCAL_CODEX_CODEX_SANDBOX_MODE `
+    -ProviderName $env:LOCAL_CODEX_CODEX_PROVIDER `
+    -ProviderDisplayName 'Official gpt-oss (Transformers)' `
+    -ProviderWireApi 'responses' `
+    -ProviderEnvKey 'LOCAL_CODEX_TRANSFORMERS_API_KEY'
 
 $profileScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'docker-profile.ps1'
 if (Test-Path -LiteralPath $profileScript) {

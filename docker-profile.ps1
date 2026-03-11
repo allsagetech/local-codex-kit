@@ -1,4 +1,27 @@
-. (Join-Path (Split-Path -Parent $PSCommandPath) 'official-models.ps1')
+function Get-OfficialModelHelpersPath {
+    $candidatePaths = @()
+
+    if ($PSCommandPath) {
+        $candidatePaths += (Join-Path (Split-Path -Parent $PSCommandPath) 'official-models.ps1')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_KIT_ROOT)) {
+        $candidatePaths += (Join-Path $env:LOCAL_CODEX_KIT_ROOT 'official-models.ps1')
+    }
+    $candidatePaths += '/opt/local-codex-kit/official-models.ps1'
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (-not [string]::IsNullOrWhiteSpace($candidatePath) -and (Test-Path -LiteralPath $candidatePath)) {
+            return $candidatePath
+        }
+    }
+
+    throw ("Unable to locate official-models.ps1. Checked: {0}" -f ($candidatePaths -join ', '))
+}
+
+. (Get-OfficialModelHelpersPath)
+
+$env:LOCAL_CODEX_CODEX_PROVIDER = if ($env:LOCAL_CODEX_CODEX_PROVIDER) { $env:LOCAL_CODEX_CODEX_PROVIDER } else { 'transformers' }
+$env:LOCAL_CODEX_TRANSFORMERS_API_KEY = if ($env:LOCAL_CODEX_TRANSFORMERS_API_KEY) { $env:LOCAL_CODEX_TRANSFORMERS_API_KEY } else { 'local-codex' }
 
 function Initialize-PSReadLineHistory {
     if (-not (Get-Module -ListAvailable -Name PSReadLine)) {
@@ -147,6 +170,19 @@ function Test-HasCodexOption {
     return $false
 }
 
+function Test-LocalCodexRuntimeReady {
+    if ([string]::IsNullOrWhiteSpace($env:CODEX_OSS_BASE_URL)) {
+        return $false
+    }
+
+    try {
+        $null = Invoke-RestMethod -Uri ($env:CODEX_OSS_BASE_URL.TrimEnd('/') + '/models') -TimeoutSec 3
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Ensure-ModelInstalled {
     param(
         [string]$ModelName
@@ -179,6 +215,14 @@ function transformers-local {
 }
 
 function codex-local {
+    if ($env:LOCAL_CODEX_TRANSFORMERS_ENABLE -eq '0') {
+        throw 'Embedded Transformers runtime is unavailable in this container. Review the startup warning above before running codex-local.'
+    }
+
+    if (-not (Test-LocalCodexRuntimeReady)) {
+        throw ("Embedded Transformers runtime is not responding at '{0}'. Start or fix the local runtime before running codex-local." -f $env:CODEX_OSS_BASE_URL)
+    }
+
     $argumentList = Normalize-CodexArgumentList -ArgumentList @($args)
     $defaultModel = if (-not [string]::IsNullOrWhiteSpace($env:LOCAL_CODEX_CODEX_MODEL)) {
         Convert-ToCanonicalModelName -ModelName $env:LOCAL_CODEX_CODEX_MODEL
@@ -201,9 +245,11 @@ function codex-local {
     }
 
     $resolvedArgs = @(
-        '-c', 'model_provider="oss"',
-        '-c', ('model_providers.oss.base_url=' + (Convert-ToTomlString -Value $env:CODEX_OSS_BASE_URL)),
-        '-c', 'model_providers.oss.name="Official gpt-oss (Transformers)"'
+        '-c', ('model_provider=' + (Convert-ToTomlString -Value $env:LOCAL_CODEX_CODEX_PROVIDER)),
+        '-c', ('model_providers.' + $env:LOCAL_CODEX_CODEX_PROVIDER + '.base_url=' + (Convert-ToTomlString -Value $env:CODEX_OSS_BASE_URL)),
+        '-c', ('model_providers.' + $env:LOCAL_CODEX_CODEX_PROVIDER + '.name=' + (Convert-ToTomlString -Value 'Official gpt-oss (Transformers)')),
+        '-c', ('model_providers.' + $env:LOCAL_CODEX_CODEX_PROVIDER + '.wire_api=' + (Convert-ToTomlString -Value 'responses')),
+        '-c', ('model_providers.' + $env:LOCAL_CODEX_CODEX_PROVIDER + '.env_key=' + (Convert-ToTomlString -Value 'LOCAL_CODEX_TRANSFORMERS_API_KEY'))
     )
 
     if (-not (Test-HasCodexOption -ArgumentList $argumentList -Names @('--sandbox'))) {
