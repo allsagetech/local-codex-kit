@@ -41,7 +41,7 @@ docker compose build local-codex-kit
 Import a host project into the Docker workspace volume:
 
 ```powershell
-.\import-workspace.ps1 -SourcePath C:\path\to\project -Destination /workspace/project
+.\import-workspace.ps1 -SourcePath C:\path\to\project -Destination /workspace/local-project
 ```
 
 Start the container:
@@ -59,9 +59,11 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm local-co
 Inside the container:
 
 ```powershell
-Set-Location /workspace/project
+Set-Location /workspace/local-project
 codex-local
 ```
+
+If you want a live host bind mount instead, work in `/workspace/project`.
 
 Equivalent manual Codex command inside the container after the entrypoint writes config:
 
@@ -158,7 +160,9 @@ The default Compose service keeps the following Docker-managed volumes:
 - `/home/codex/.codex`
 - `/home/codex/.cache`
 
-The service also includes one host bind mount at `/workspace/project`, which defaults to `./host-project` unless `LOCAL_CODEX_HOST_PROJECT_PATH` is set.
+The service also includes one optional host bind mount at `/workspace/project`, which defaults to `./host-project` unless `LOCAL_CODEX_HOST_PROJECT_PATH` is set.
+
+When you use `import-workspace.ps1`, target a path under `/workspace` that is not the host bind mount, such as `/workspace/local-project`. The import helper uses a dedicated Compose service that mounts only the Docker-managed volumes, so it does not depend on the optional host bind mount being valid.
 
 ## Troubleshooting
 

@@ -1,53 +1,56 @@
+x-local-codex-kit-common: &local-codex-kit-common
+  build:
+    context: .
+    args:
+      LOCAL_CODEX_BASE_IMAGE: ${LOCAL_CODEX_BASE_IMAGE:-ubuntu:22.04}
+      LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
+      LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B: ${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B:-openai-gpt-oss-20b:1.0.0}
+      TOOLCHAIN_TOKEN: ${TOOLCHAIN_TOKEN:-}
+      TOOLCHAIN_USERNAME: ${TOOLCHAIN_USERNAME:-}
+      TOOLCHAIN_PASSWORD: ${TOOLCHAIN_PASSWORD:-}
+  image: allsagetech/local-codex-kit:latest
+  network_mode: "none"
+  init: true
+  stdin_open: true
+  tty: true
+  read_only: true
+  working_dir: /workspace
+  ports: []
+  expose: []
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:exec,mode=1777
+    - /run:mode=755
+  environment:
+    HOME: /home/codex
+    CODEX_HOME: /home/codex/.codex
+    LOCAL_CODEX_WORKSPACE: /workspace
+    LOCAL_CODEX_TOOLCHAIN_PATH: /opt/local-codex-kit/toolchain-store
+    LOCAL_CODEX_MODEL_MANIFEST: /opt/local-codex-kit/official-models.manifest.json
+    LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
+    LOCAL_CODEX_OFFICIAL_MODEL_ALIAS: ${LOCAL_CODEX_OFFICIAL_MODEL_ALIAS:-}
+    LOCAL_CODEX_TRANSFORMERS_ENABLE: ${LOCAL_CODEX_TRANSFORMERS_ENABLE:-1}
+    LOCAL_CODEX_TRANSFORMERS_PORT: ${LOCAL_CODEX_TRANSFORMERS_PORT:-8000}
+    LOCAL_CODEX_TRANSFORMERS_DEVICE: ${LOCAL_CODEX_TRANSFORMERS_DEVICE:-auto}
+    LOCAL_CODEX_TRANSFORMERS_DTYPE: ${LOCAL_CODEX_TRANSFORMERS_DTYPE:-auto}
+    LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING: ${LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING:-0}
+    LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION: ${LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION:-}
+    LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK: ${LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK:-0}
+    LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC:-300}
+    LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY: ${LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY:-0}
+    LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS: ${LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS:-1024}
+    LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR: ${LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR:-/tmp/local-codex-kit/transformers-offload}
+    LOCAL_CODEX_OSS_PROXY_ENABLE: ${LOCAL_CODEX_OSS_PROXY_ENABLE:-1}
+    LOCAL_CODEX_OSS_PROXY_PORT: ${LOCAL_CODEX_OSS_PROXY_PORT:-8001}
+    LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
+    LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
+
 services:
   local-codex-kit:
-    build:
-      context: .
-      args:
-        LOCAL_CODEX_BASE_IMAGE: ${LOCAL_CODEX_BASE_IMAGE:-ubuntu:22.04}
-        LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
-        LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B: ${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B:-openai-gpt-oss-20b:1.0.0}
-        TOOLCHAIN_TOKEN: ${TOOLCHAIN_TOKEN:-}
-        TOOLCHAIN_USERNAME: ${TOOLCHAIN_USERNAME:-}
-        TOOLCHAIN_PASSWORD: ${TOOLCHAIN_PASSWORD:-}
-    image: allsagetech/local-codex-kit:latest
-    network_mode: "none"
-    init: true
-    stdin_open: true
-    tty: true
-    read_only: true
-    working_dir: /workspace
-    ports: []
-    expose: []
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp:exec,mode=1777
-      - /run:mode=755
-    environment:
-      HOME: /home/codex
-      CODEX_HOME: /home/codex/.codex
-      LOCAL_CODEX_WORKSPACE: /workspace
-      LOCAL_CODEX_TOOLCHAIN_PATH: /opt/local-codex-kit/toolchain-store
-      LOCAL_CODEX_MODEL_MANIFEST: /opt/local-codex-kit/official-models.manifest.json
-      LOCAL_CODEX_OFFICIAL_PULL_MODELS: ${LOCAL_CODEX_OFFICIAL_PULL_MODELS:-openai/gpt-oss-20b}
-      LOCAL_CODEX_OFFICIAL_MODEL_ALIAS: ${LOCAL_CODEX_OFFICIAL_MODEL_ALIAS:-}
-      LOCAL_CODEX_TRANSFORMERS_ENABLE: ${LOCAL_CODEX_TRANSFORMERS_ENABLE:-1}
-      LOCAL_CODEX_TRANSFORMERS_PORT: ${LOCAL_CODEX_TRANSFORMERS_PORT:-8000}
-      LOCAL_CODEX_TRANSFORMERS_DEVICE: ${LOCAL_CODEX_TRANSFORMERS_DEVICE:-auto}
-      LOCAL_CODEX_TRANSFORMERS_DTYPE: ${LOCAL_CODEX_TRANSFORMERS_DTYPE:-auto}
-      LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING: ${LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING:-0}
-      LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION: ${LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION:-}
-      LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK: ${LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK:-0}
-      LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC:-300}
-      LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY: ${LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY:-0}
-      LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS: ${LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS:-1024}
-      LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR: ${LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR:-/tmp/local-codex-kit/transformers-offload}
-      LOCAL_CODEX_OSS_PROXY_ENABLE: ${LOCAL_CODEX_OSS_PROXY_ENABLE:-1}
-      LOCAL_CODEX_OSS_PROXY_PORT: ${LOCAL_CODEX_OSS_PROXY_PORT:-8001}
-      LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
-      LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
+    <<: *local-codex-kit-common
     volumes:
       - local-codex-kit-workspace:/workspace
       - local-codex-kit-cache:/home/codex/.cache
@@ -71,6 +74,14 @@ services:
       - type: bind
         source: ${LOCAL_CODEX_HOST_PROJECT_PATH:-./host-project}
         target: /workspace/project
+  local-codex-kit-workspace-import:
+    <<: *local-codex-kit-common
+    stdin_open: false
+    tty: false
+    volumes:
+      - local-codex-kit-workspace:/workspace
+      - local-codex-kit-cache:/home/codex/.cache
+      - local-codex-kit-codex-home:/home/codex/.codex
 
 volumes:
   local-codex-kit-workspace:

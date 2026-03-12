@@ -92,7 +92,7 @@ ENV LOCAL_CODEX_MODEL_MANIFEST=${LOCAL_CODEX_MODEL_MANIFEST}
 ENV LOCAL_CODEX_OFFICIAL_PULL_MODELS=${LOCAL_CODEX_OFFICIAL_PULL_MODELS}
 ENV LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B=${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B}
 
-COPY . .
+COPY official-models.ps1 pull-official-models.ps1 ./
 
 RUN set -eux \
     && if ! getent group "${LOCAL_CODEX_RUNTIME_GID}" >/dev/null; then groupadd --gid "${LOCAL_CODEX_RUNTIME_GID}" "${LOCAL_CODEX_RUNTIME_USER}"; fi \
@@ -103,13 +103,18 @@ RUN set -eux \
         "${HOME}/.cache" \
         "${HOME}/.cache/huggingface/hub" \
         "${HOME}/.config/powershell" \
-        "${LOCAL_CODEX_TOOLCHAIN_PATH}" \
-    && cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
-    && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code
+        "${LOCAL_CODEX_TOOLCHAIN_PATH}"
 
 RUN set -eux \
     && HOME="${HOME}" LOCAL_CODEX_TOOLCHAIN_PATH="${LOCAL_CODEX_TOOLCHAIN_PATH}" LOCAL_CODEX_MODEL_MANIFEST="${LOCAL_CODEX_MODEL_MANIFEST}" LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B="${LOCAL_CODEX_TOOLCHAIN_PACKAGE_GPT_OSS_20B}" TOOLCHAIN_TOKEN="${TOOLCHAIN_TOKEN}" TOOLCHAIN_USERNAME="${TOOLCHAIN_USERNAME}" TOOLCHAIN_PASSWORD="${TOOLCHAIN_PASSWORD}" /usr/local/bin/pwsh -NoLogo -NoProfile -File ./pull-official-models.ps1 -Models "${LOCAL_CODEX_OFFICIAL_PULL_MODELS}" \
     && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}" /workspace "${LOCAL_CODEX_TOOLCHAIN_PATH}"
+
+COPY docker-entrypoint.ps1 docker-profile.ps1 docker-code-wrapper.sh start-transformers-server.ps1 codex-openai-proxy.py ./
+COPY python-patches ./python-patches
+
+RUN cp /opt/local-codex-kit/docker-profile.ps1 "${HOME}/.config/powershell/Microsoft.PowerShell_profile.ps1" \
+    && install -m 0755 /opt/local-codex-kit/docker-code-wrapper.sh /usr/local/bin/code \
+    && chown -R "${LOCAL_CODEX_RUNTIME_UID}:${LOCAL_CODEX_RUNTIME_GID}" "${HOME}"
 
 USER ${LOCAL_CODEX_RUNTIME_USER}
 

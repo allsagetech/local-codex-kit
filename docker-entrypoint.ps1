@@ -239,7 +239,7 @@ Write-Host ("- Working directory: {0}" -f (Get-Location).Path)
 Write-Host ("- Network mode: {0}" -f 'offline (set by docker compose)')
 Write-Host ("- Runtime user: {0}" -f $(if ($env:LOCAL_CODEX_RUNTIME_USER) { $env:LOCAL_CODEX_RUNTIME_USER } else { 'codex' }))
 Write-Host ("- Codex home: {0}" -f $env:CODEX_HOME)
-Write-Host ("- Workspace storage: {0}" -f 'Docker-managed volume mounted at /workspace')
+Write-Host ("- Workspace storage: {0}" -f 'Docker-managed volume at /workspace plus optional bind mount at /workspace/project')
 if ($env:LOCAL_CODEX_OFFICIAL_PULL_MODELS -and ($env:LOCAL_CODEX_OFFICIAL_PULL_MODELS -ne 'none')) {
     Write-Host ("- Build-downloaded official models: {0}" -f $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS)
 }
@@ -278,7 +278,11 @@ if ($Command -and $Command.Count -gt 0) {
     $commandName = $Command[0]
     $commandArgs = @($Command | Select-Object -Skip 1)
     & $commandName @commandArgs
-    exit $LASTEXITCODE
+    if ($null -ne $LASTEXITCODE) {
+        exit $LASTEXITCODE
+    }
+
+    exit $(if ($?) { 0 } else { 1 })
 }
 
 Write-Host 'Starting interactive PowerShell session...'
