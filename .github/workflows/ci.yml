@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - local-gpt-oss-20b
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run static validation
+        shell: pwsh
+        run: ./ci/validate-static.ps1
+
+  smoke-build:
+    runs-on: ubuntu-latest
+    needs: static-validation
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build image without pulling official models
+        env:
+          DOCKER_BUILDKIT: "1"
+          BUILDKIT_PROGRESS: plain
+          LOCAL_CODEX_OFFICIAL_PULL_MODELS: none
+        run: docker compose build local-codex-kit
