@@ -48,6 +48,71 @@ function Initialize-CodexConfig {
     }
 }
 
+function Start-CodexOpenAIProxy {
+    param(
+        [string]$ProxyScriptPath,
+        [string]$ListenHost,
+        [string]$ListenPort,
+        [string]$UpstreamBaseUrl,
+        [string]$PrimaryModel,
+        [string]$StartupTimeoutSec
+    )
+
+    if (-not (Test-Path -LiteralPath $ProxyScriptPath)) {
+        throw "Codex proxy script not found: $ProxyScriptPath"
+    }
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) {
+        throw '`python` is required to start the Codex OpenAI proxy.'
+    }
+
+    $logDir = '/tmp/local-codex-kit'
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    $outLog = Join-Path $logDir 'codex-openai-proxy.out.log'
+    $errLog = Join-Path $logDir 'codex-openai-proxy.err.log'
+    $argumentList = @(
+        $ProxyScriptPath,
+        '--listen-host', $ListenHost,
+        '--listen-port', $ListenPort,
+        '--upstream-base', $UpstreamBaseUrl,
+        '--model-id', $PrimaryModel
+    )
+
+    $proc = Start-Process -FilePath $python.Source -ArgumentList $argumentList -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+    $baseUrl = "http://$ListenHost`:$ListenPort"
+    $deadline = (Get-Date).AddSeconds([int]$StartupTimeoutSec)
+
+    while ((Get-Date) -lt $deadline) {
+        if ($proc.HasExited) {
+            throw ("Codex OpenAI proxy exited before becoming ready.`n`nstdout: {0}`nstderr: {1}" -f $outLog, $errLog)
+        }
+
+        try {
+            $health = Invoke-RestMethod -Uri ($baseUrl + '/healthz') -TimeoutSec 3
+            if ($health.status -eq 'ok') {
+                return [pscustomobject]@{
+                    started       = $true
+                    processId     = $proc.Id
+                    baseUrl       = $baseUrl
+                    stdoutLogPath = $outLog
+                    stderrLogPath = $errLog
+                }
+            }
+        } catch {
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    try {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    } catch {
+    }
+
+    throw ("Timed out waiting for the Codex OpenAI proxy. stdout: {0} stderr: {1}" -f $outLog, $errLog)
+}
+
 $env:LOCAL_CODEX_KIT_ROOT = if ($env:LOCAL_CODEX_KIT_ROOT) { $env:LOCAL_CODEX_KIT_ROOT } else { '/opt/local-codex-kit' }
 $env:HOME = if ($env:HOME) { $env:HOME } else { '/home/codex' }
 $env:LOCAL_CODEX_WORKSPACE = if ($env:LOCAL_CODEX_WORKSPACE) { $env:LOCAL_CODEX_WORKSPACE } else { '/workspace' }
@@ -57,6 +122,8 @@ $env:LOCAL_CODEX_OFFICIAL_PULL_MODELS = if ($env:LOCAL_CODEX_OFFICIAL_PULL_MODEL
 $env:LOCAL_CODEX_TRANSFORMERS_PORT = if ($env:LOCAL_CODEX_TRANSFORMERS_PORT) { $env:LOCAL_CODEX_TRANSFORMERS_PORT } else { '8000' }
 $env:LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY = if ($env:LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY) { $env:LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY } else { '0' }
 $env:LOCAL_CODEX_TRANSFORMERS_ENABLE = if ($env:LOCAL_CODEX_TRANSFORMERS_ENABLE) { $env:LOCAL_CODEX_TRANSFORMERS_ENABLE } else { '1' }
+$env:LOCAL_CODEX_OSS_PROXY_ENABLE = if ($env:LOCAL_CODEX_OSS_PROXY_ENABLE) { $env:LOCAL_CODEX_OSS_PROXY_ENABLE } else { '1' }
+$env:LOCAL_CODEX_OSS_PROXY_PORT = if ($env:LOCAL_CODEX_OSS_PROXY_PORT) { $env:LOCAL_CODEX_OSS_PROXY_PORT } else { '8001' }
 $env:CODEX_HOME = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { '/home/codex/.codex' }
 $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY = if ($env:LOCAL_CODEX_CODEX_APPROVAL_POLICY) { $env:LOCAL_CODEX_CODEX_APPROVAL_POLICY } else { 'on-request' }
 $env:LOCAL_CODEX_CODEX_SANDBOX_MODE = if ($env:LOCAL_CODEX_CODEX_SANDBOX_MODE) { $env:LOCAL_CODEX_CODEX_SANDBOX_MODE } else { 'danger-full-access' }
@@ -96,6 +163,8 @@ Set-Location $workspace
 
 $transformersInfo = $null
 $transformersStartupError = $null
+$proxyInfo = $null
+$proxyStartupError = $null
 if ($env:LOCAL_CODEX_TRANSFORMERS_ENABLE -ne '0') {
     $starterScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'start-transformers-server.ps1'
     if (-not (Test-Path -LiteralPath $starterScript)) {
@@ -123,7 +192,29 @@ $env:LOCAL_CODEX_TRANSFORMERS_BASE_URL = if ($transformersInfo) {
 } else {
     "http://$transformersHost`:$($env:LOCAL_CODEX_TRANSFORMERS_PORT)"
 }
-$env:CODEX_OSS_BASE_URL = $env:LOCAL_CODEX_TRANSFORMERS_BASE_URL.TrimEnd('/') + '/v1'
+
+if (($env:LOCAL_CODEX_OSS_PROXY_ENABLE -ne '0') -and $transformersInfo) {
+    $proxyScript = Join-Path $env:LOCAL_CODEX_KIT_ROOT 'codex-openai-proxy.py'
+    try {
+        $proxyInfo = Start-CodexOpenAIProxy `
+            -ProxyScriptPath $proxyScript `
+            -ListenHost '127.0.0.1' `
+            -ListenPort $env:LOCAL_CODEX_OSS_PROXY_PORT `
+            -UpstreamBaseUrl $env:LOCAL_CODEX_TRANSFORMERS_BASE_URL `
+            -PrimaryModel $env:LOCAL_CODEX_CODEX_MODEL `
+            -StartupTimeoutSec $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC
+    } catch {
+        $proxyStartupError = $_.Exception.Message
+        Write-Warning 'Codex OpenAI proxy failed to start. Falling back to the raw transformers endpoint.'
+        Write-Warning $proxyStartupError
+    }
+}
+
+$env:CODEX_OSS_BASE_URL = if ($proxyInfo) {
+    $proxyInfo.baseUrl.TrimEnd('/') + '/v1'
+} else {
+    $env:LOCAL_CODEX_TRANSFORMERS_BASE_URL.TrimEnd('/') + '/v1'
+}
 
 Initialize-CodexConfig `
     -CodexHome $env:CODEX_HOME `
@@ -163,6 +254,14 @@ if ($transformersInfo) {
     }
 } elseif ($transformersStartupError) {
     Write-Host '- Transformers startup: failed; shell fallback enabled'
+}
+if ($proxyInfo) {
+    Write-Host ("- Codex proxy endpoint: {0}" -f $proxyInfo.baseUrl)
+    if ($proxyInfo.started -and $proxyInfo.processId) {
+        Write-Host ("- Codex proxy PID: {0}" -f $proxyInfo.processId)
+    }
+} elseif ($proxyStartupError) {
+    Write-Host '- Codex proxy startup: failed; using raw transformers endpoint'
 }
 Write-Host ("- Codex OSS endpoint: {0}" -f $env:CODEX_OSS_BASE_URL)
 Write-Host ("- Codex default model: {0}" -f $env:LOCAL_CODEX_CODEX_MODEL)

@@ -1,3 +1,5 @@
 services:
   local-codex-kit:
     gpus: all
+    environment:
+      LOCAL_CODEX_TRANSFORMERS_DEVICE: ${LOCAL_CODEX_TRANSFORMERS_DEVICE:-cuda}

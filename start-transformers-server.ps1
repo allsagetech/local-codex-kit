@@ -8,6 +8,9 @@ $env:LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC = if ($env:LOCAL_CODEX_TRANSFO
 $env:LOCAL_CODEX_TRANSFORMERS_DTYPE = if ($env:LOCAL_CODEX_TRANSFORMERS_DTYPE) { $env:LOCAL_CODEX_TRANSFORMERS_DTYPE } else { 'auto' }
 $env:LOCAL_CODEX_TRANSFORMERS_DEVICE = if ($env:LOCAL_CODEX_TRANSFORMERS_DEVICE) { $env:LOCAL_CODEX_TRANSFORMERS_DEVICE } else { 'auto' }
 $env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK = if ($env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK) { $env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK } else { '0' }
+$env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS = if ($env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS) { $env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS } else { '1024' }
+$env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR = if ($env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR) { $env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR } else { '/tmp/local-codex-kit/transformers-offload' }
+$env:PYTHONPATH = if ($env:PYTHONPATH) { '/opt/local-codex-kit/python-patches:' + $env:PYTHONPATH } else { '/opt/local-codex-kit/python-patches' }
 
 $transformers = Get-Command transformers -ErrorAction SilentlyContinue
 if (-not $transformers) {
@@ -132,6 +135,7 @@ if (-not (Test-Path -LiteralPath $resolvedModelPath)) {
 
 $logDir = '/tmp/local-codex-kit'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$null = New-Item -ItemType Directory -Path $env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR -Force
 $outLog = Join-Path $logDir 'transformers.out.log'
 $errLog = Join-Path $logDir 'transformers.err.log'
 
@@ -150,7 +154,7 @@ if ($env:LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING -eq '1') {
     $argumentList += '--continuous-batching'
 }
 if ($env:LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION) {
-    $argumentList += @('--attn_implementation', $env:LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION)
+    $argumentList += @('--attn-implementation', $env:LOCAL_CODEX_TRANSFORMERS_ATTN_IMPLEMENTATION)
 }
 
 $proc = Start-Process -FilePath $transformers.Source -ArgumentList $argumentList -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog

@@ -42,12 +42,32 @@ services:
       LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK: ${LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK:-0}
       LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC: ${LOCAL_CODEX_TRANSFORMERS_STARTUP_TIMEOUT_SEC:-300}
       LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY: ${LOCAL_CODEX_TRANSFORMERS_REQUIRE_READY:-0}
+      LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS: ${LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS:-1024}
+      LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR: ${LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR:-/tmp/local-codex-kit/transformers-offload}
+      LOCAL_CODEX_OSS_PROXY_ENABLE: ${LOCAL_CODEX_OSS_PROXY_ENABLE:-1}
+      LOCAL_CODEX_OSS_PROXY_PORT: ${LOCAL_CODEX_OSS_PROXY_PORT:-8001}
       LOCAL_CODEX_CODEX_APPROVAL_POLICY: ${LOCAL_CODEX_CODEX_APPROVAL_POLICY:-on-request}
       LOCAL_CODEX_CODEX_SANDBOX_MODE: ${LOCAL_CODEX_CODEX_SANDBOX_MODE:-danger-full-access}
     volumes:
       - local-codex-kit-workspace:/workspace
       - local-codex-kit-cache:/home/codex/.cache
       - local-codex-kit-codex-home:/home/codex/.codex
+      - type: bind
+        source: ./docker-entrypoint.ps1
+        target: /opt/local-codex-kit/docker-entrypoint.ps1
+        read_only: true
+      - type: bind
+        source: ./start-transformers-server.ps1
+        target: /opt/local-codex-kit/start-transformers-server.ps1
+        read_only: true
+      - type: bind
+        source: ./codex-openai-proxy.py
+        target: /opt/local-codex-kit/codex-openai-proxy.py
+        read_only: true
+      - type: bind
+        source: ./python-patches
+        target: /opt/local-codex-kit/python-patches
+        read_only: true
       - type: bind
         source: ${LOCAL_CODEX_HOST_PROJECT_PATH:-./host-project}
         target: /workspace/project
