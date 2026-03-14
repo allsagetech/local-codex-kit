@@ -131,6 +131,7 @@ Default runtime settings:
 - `LOCAL_CODEX_TRANSFORMERS_DTYPE=auto`
 - `LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING=0`
 - `LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK=0`
+- `LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_ENABLE=1`
 
 Optional tuning:
 
@@ -168,6 +169,8 @@ When you use `import-workspace.ps1`, target a path under `/workspace` that is no
 
 If the Transformers server fails to start, the entrypoint prints log file paths from `/tmp/local-codex-kit` before dropping you into the shell.
 
+The startup path now performs one tiny generation smoke test after `/v1/models` becomes reachable. This catches the common case where the HTTP server starts but the first real request still fails during model load or GPU allocation.
+
 If `codex-local` refuses to start, it now means the embedded runtime is disabled or unreachable; fix the startup warning first instead of retrying the Codex CLI against a dead local endpoint.
 
 Useful checks inside the container:
@@ -182,6 +185,8 @@ Get-ChildItem /tmp/local-codex-kit
 Get-Content /tmp/local-codex-kit/transformers.err.log -Tail 100
 Get-Content /tmp/local-codex-kit/transformers.out.log -Tail 100
 ```
+
+If the smoke test reports `CUDA out of memory`, the selected official model does not fit on the currently available accelerator for this `transformers serve` path. On that hardware, use a larger GPU, switch to a smaller model, or opt into CPU fallback only if you accept much slower responses.
 
 If `codex-local` reports that a model is missing, rebuild the image with `LOCAL_CODEX_OFFICIAL_PULL_MODELS` updated to include that model.
 

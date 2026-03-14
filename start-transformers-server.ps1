@@ -10,6 +10,9 @@ $env:LOCAL_CODEX_TRANSFORMERS_DEVICE = if ($env:LOCAL_CODEX_TRANSFORMERS_DEVICE)
 $env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK = if ($env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK) { $env:LOCAL_CODEX_TRANSFORMERS_ALLOW_CPU_FALLBACK } else { '0' }
 $env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS = if ($env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS) { $env:LOCAL_CODEX_TRANSFORMERS_MIN_OUTPUT_TOKENS } else { '1024' }
 $env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR = if ($env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR) { $env:LOCAL_CODEX_TRANSFORMERS_OFFLOAD_DIR } else { '/tmp/local-codex-kit/transformers-offload' }
+$env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_ENABLE = if ($env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_ENABLE) { $env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_ENABLE } else { '1' }
+$env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_TIMEOUT_SEC = if ($env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_TIMEOUT_SEC) { $env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_TIMEOUT_SEC } else { '45' }
+$env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_MAX_OUTPUT_TOKENS = if ($env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_MAX_OUTPUT_TOKENS) { $env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_MAX_OUTPUT_TOKENS } else { '16' }
 $env:PYTHONPATH = if ($env:PYTHONPATH) { '/opt/local-codex-kit/python-patches:' + $env:PYTHONPATH } else { '/opt/local-codex-kit/python-patches' }
 
 $transformers = Get-Command transformers -ErrorAction SilentlyContinue
@@ -95,6 +98,64 @@ function Assert-TransformersRuntimeSupported {
     throw $message
 }
 
+function Get-TransformersFailureHint {
+    param(
+        [string]$ErrLogPath,
+        [string]$ModelName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ErrLogPath) -or -not (Test-Path -LiteralPath $ErrLogPath)) {
+        return ''
+    }
+
+    $recentLog = Get-Content -LiteralPath $ErrLogPath -Tail 120 -ErrorAction SilentlyContinue
+    if ($recentLog -match 'CUDA out of memory|torch\.OutOfMemoryError') {
+        return (
+            "The first generation attempt for '{0}' hit a CUDA out-of-memory error. " +
+            "This official transformers runtime currently does not fit on the available accelerator. " +
+            "Use a larger GPU, switch to a smaller model, or opt into CPU fallback only if you accept much slower responses."
+        ) -f $ModelName
+    }
+
+    return ''
+}
+
+function Invoke-TransformersSmokeTest {
+    param(
+        [string]$BaseUrl,
+        [string]$ModelName,
+        [int]$TimeoutSec,
+        [int]$MaxOutputTokens
+    )
+
+    $payload = @{
+        model             = $ModelName
+        input             = 'Reply with exactly hello.'
+        max_output_tokens = $MaxOutputTokens
+    } | ConvertTo-Json -Depth 6
+
+    try {
+        $response = Invoke-RestMethod `
+            -Uri ($BaseUrl + '/v1/responses') `
+            -Method Post `
+            -ContentType 'application/json' `
+            -Body $payload `
+            -TimeoutSec $TimeoutSec
+    } catch {
+        $details = if ($_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+            $_.ErrorDetails.Message
+        } else {
+            $_.Exception.Message
+        }
+
+        throw ("Transformers smoke test failed for '{0}': {1}" -f $ModelName, $details)
+    }
+
+    if ($null -eq $response) {
+        throw ("Transformers smoke test returned no payload for '{0}'." -f $ModelName)
+    }
+}
+
 $manifest = @(Read-ModelManifest -ManifestPath $env:LOCAL_CODEX_MODEL_MANIFEST)
 if ($manifest.Count -eq 0) {
     throw ("No official models are available in manifest '{0}'. Rebuild the image with LOCAL_CODEX_OFFICIAL_PULL_MODELS set." -f $env:LOCAL_CODEX_MODEL_MANIFEST)
@@ -170,6 +231,24 @@ while ((Get-Date) -lt $deadline) {
     try {
         $models = Invoke-RestMethod -Uri ($baseUrl + '/v1/models') -TimeoutSec 5
         if ($models) {
+            if ($env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_ENABLE -ne '0') {
+                try {
+                    Invoke-TransformersSmokeTest `
+                        -BaseUrl $baseUrl `
+                        -ModelName $modelEntry.repo `
+                        -TimeoutSec ([int]$env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_TIMEOUT_SEC) `
+                        -MaxOutputTokens ([int]$env:LOCAL_CODEX_TRANSFORMERS_SMOKE_TEST_MAX_OUTPUT_TOKENS)
+                } catch {
+                    $hint = Get-TransformersFailureHint -ErrLogPath $errLog -ModelName $modelEntry.repo
+                    $message = $_.Exception.Message
+                    if (-not [string]::IsNullOrWhiteSpace($hint)) {
+                        $message = $message + "`n`n" + $hint
+                    }
+
+                    throw $message
+                }
+            }
+
             return [pscustomobject]@{
                 started       = $true
                 processId     = $proc.Id
@@ -181,6 +260,13 @@ while ((Get-Date) -lt $deadline) {
             }
         }
     } catch {
+        if ($_.Exception.Message -like 'Transformers smoke test*') {
+            throw
+        }
+
+        if ($proc.HasExited) {
+            throw
+        }
     }
 
     Start-Sleep -Seconds 1
