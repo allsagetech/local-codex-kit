@@ -3,6 +3,7 @@
 import argparse
 import codecs
 import json
+import os
 import queue
 import sys
 import threading
@@ -12,7 +13,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-HOP_BY_HOP_HEADERS = {
+REQUEST_EXCLUDED_HEADERS = {
     "connection",
     "keep-alive",
     "proxy-authenticate",
@@ -23,6 +24,16 @@ HOP_BY_HOP_HEADERS = {
     "upgrade",
     "host",
     "content-length",
+}
+RESPONSE_EXCLUDED_HEADERS = {
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
 }
 SPECIAL_RESPONSE_MARKERS = (
     "<|channel|>analysis<|message|>",
@@ -191,7 +202,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         )
 
         for header_name, header_value in self.headers.items():
-            if header_name.lower() in HOP_BY_HOP_HEADERS:
+            if header_name.lower() in REQUEST_EXCLUDED_HEADERS:
                 continue
             upstream_request.add_header(header_name, header_value)
 
@@ -217,7 +228,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         content_type = headers.get("Content-Type", "")
         self.send_response(status_code)
         for header_name, header_value in headers.items():
-            if header_name.lower() in HOP_BY_HOP_HEADERS:
+            if header_name.lower() in RESPONSE_EXCLUDED_HEADERS:
                 continue
             self.send_header(header_name, header_value)
         self.end_headers()
@@ -227,11 +238,17 @@ class ProxyHandler(BaseHTTPRequestHandler):
             return
 
         while True:
-            chunk = response.read(65536)
+            chunk = self._read_response_chunk(response, 65536)
             if not chunk:
                 break
             self.wfile.write(chunk)
             self.wfile.flush()
+
+    def _read_response_chunk(self, response, chunk_size):
+        read1 = getattr(response, "read1", None)
+        if callable(read1):
+            return read1(chunk_size)
+        return response.read(chunk_size)
 
     def _relay_sse_response(self, response, request_path=""):
         sentinel = object()
@@ -240,7 +257,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         def _reader():
             try:
                 while True:
-                    chunk = response.read(65536)
+                    chunk = self._read_response_chunk(response, 1024)
                     if not chunk:
                         break
                     chunks.put(chunk)
