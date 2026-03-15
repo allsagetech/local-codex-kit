@@ -127,6 +127,7 @@ The embedded server is `transformers serve`, which exposes an OpenAI-compatible 
 Default runtime settings:
 
 - `LOCAL_CODEX_TRANSFORMERS_PORT=8000`
+- `LOCAL_CODEX_TRANSFORMERS_MODEL_TIMEOUT_SEC=-1`
 - `LOCAL_CODEX_TRANSFORMERS_DEVICE=auto`
 - `LOCAL_CODEX_TRANSFORMERS_DTYPE=auto`
 - `LOCAL_CODEX_TRANSFORMERS_CONTINUOUS_BATCHING=0`
@@ -144,6 +145,17 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm local-co
 ```
 
 This path is more faithful to the official weights, but it is also heavier than the GGUF/Ollama path. You should expect stronger hardware requirements.
+
+If you are running `openai/gpt-oss-20b` on a 24 GB card such as an RTX 4090, prefer the offload override instead of forcing the runtime to stay entirely on CUDA:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu-offload.yml run --rm local-codex-kit
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu-offload.yml run --rm local-codex-kit codex exec --skip-git-repo-check --color never --json -m openai/gpt-oss-20b 'Reply with exactly hello and nothing else.'
+```
+
+That override keeps GPU access enabled, switches `transformers serve` back to `device=auto`, moves the offload folder onto `/workspace` instead of tmpfs, and lowers the proxy-enforced `max_output_tokens` floor to `64`. It is slower than the hard-`cuda` path, but it is a practical way to fit `gpt-oss-20b` on 24 GB hardware.
+
+By default, the forced local model now stays loaded for the lifetime of the container. That avoids multi-minute cold reloads after idle periods, which otherwise cause the first streamed Codex request to sit without SSE events long enough for the client to time out. If you want the upstream `transformers serve` auto-unload behavior back, set `LOCAL_CODEX_TRANSFORMERS_MODEL_TIMEOUT_SEC` to a positive number of seconds.
 
 On CPU-only hosts, the default `auto` device selection is disabled up front for the bundled MXFP4 `gpt-oss-20b` weights because current `transformers serve` falls over during auto offload. If you want to try a CPU run anyway, opt in explicitly:
 
@@ -186,7 +198,7 @@ Get-Content /tmp/local-codex-kit/transformers.err.log -Tail 100
 Get-Content /tmp/local-codex-kit/transformers.out.log -Tail 100
 ```
 
-If the smoke test reports `CUDA out of memory`, the selected official model does not fit on the currently available accelerator for this `transformers serve` path. On that hardware, use a larger GPU, switch to a smaller model, or opt into CPU fallback only if you accept much slower responses.
+If the smoke test reports `CUDA out of memory`, the selected official model does not fit on the currently available accelerator for this `transformers serve` path. On 24 GB cards such as an RTX 4090, try the `docker-compose.gpu-offload.yml` profile first. If that still fails, use a larger GPU, switch to a smaller model, or opt into CPU fallback only if you accept much slower responses.
 
 If `codex-local` reports that a model is missing, rebuild the image with `LOCAL_CODEX_OFFICIAL_PULL_MODELS` updated to include that model.
 
@@ -194,6 +206,7 @@ If `codex-local` reports that a model is missing, rebuild the image with `LOCAL_
 
 - `Dockerfile`: builds the image, installs Codex, Toolchain, and Transformers serving dependencies, then pulls the configured official model package into the image
 - `docker-compose.yml`: defines the offline hardened runtime, the Docker-managed state volumes, and the live host project bind mount at `/workspace/project`
+- `docker-compose.gpu-offload.yml`: optional GPU offload override for 24 GB cards that need `device=auto`, a persistent offload folder, and a smaller default output budget for `gpt-oss-20b`
 - `docker-entrypoint.ps1`: starts `transformers serve`, seeds the Codex OSS config, and opens the shell
 - `docker-profile.ps1`: adds the `codex-local`, `codex-official`, and `transformers-local` convenience commands
 - `official-models.ps1`: shared official model alias and manifest helpers
